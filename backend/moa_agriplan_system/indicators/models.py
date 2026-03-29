@@ -152,6 +152,10 @@ class Indicator(models.Model):
         default=list,
         help_text="List of applicable quarters: [1, 2, 3, 4]. Empty list means all quarters apply"
     )
+    baseline = models.DecimalField(
+        max_digits=20, decimal_places=2, null=True, blank=True,
+        help_text="Baseline value for this indicator"
+    )
 
     class Meta:
         # No unique constraint - allow same indicator names in different departments/groups

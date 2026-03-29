@@ -20,6 +20,7 @@ type AnnualPlan = {
   year: number;
   indicator: number;
   indicator_name: string;
+  indicator_name_with_group?: string;
   indicator_unit?: string;
   department_id?: number;
   department_name?: string;
@@ -137,7 +138,7 @@ export default function FinalApprovals() {
     const q = query.toLowerCase();
     return arr.filter(b => {
       const p = planById[b.plan];
-      const txt = [p.indicator_name, p.department_name, p.sector_name, p.indicator_unit].join(' ').toLowerCase();
+      const txt = [p.indicator_name_with_group || p.indicator_name, p.department_name, p.sector_name, p.indicator_unit].join(' ').toLowerCase();
       return txt.includes(q);
     });
   }, [breakdowns, planById, query, selectedSectorId, selectedDepartmentId]);
@@ -155,7 +156,7 @@ export default function FinalApprovals() {
     const q = query.toLowerCase();
     return arr.filter(pr => {
       const p = planById[pr.plan];
-      const txt = [p.indicator_name, p.department_name, p.sector_name, p.indicator_unit].join(' ').toLowerCase();
+      const txt = [p.indicator_name_with_group || p.indicator_name, p.department_name, p.sector_name, p.indicator_unit].join(' ').toLowerCase();
       return txt.includes(q);
     });
   }, [perfs, planById, query, selectedSectorId, selectedDepartmentId]);
@@ -206,7 +207,7 @@ export default function FinalApprovals() {
         if (type === 'breakdowns') {
           const b = item as Breakdown;
           return [
-            `"${plan?.indicator_name}"`,
+            `"${plan?.indicator_name_with_group || plan?.indicator_name}"`,
             `"${plan?.department_name || ''}"`,
             `"${plan?.sector_name || ''}"`,
             plan?.target || '0',
@@ -218,7 +219,7 @@ export default function FinalApprovals() {
         } else {
           const p = item as Performance;
           return [
-            `"${plan?.indicator_name}"`,
+            `"${plan?.indicator_name_with_group || plan?.indicator_name}"`,
             `"${plan?.department_name || ''}"`,
             `"${plan?.sector_name || ''}"`,
             `Q${p.quarter}`,
@@ -457,24 +458,24 @@ export default function FinalApprovals() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-2">
-                                <h4 className="font-medium text-gray-900">{p?.indicator_name}</h4>
-                                {p?.indicator_unit && (
-                                  <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
-                                    {p.indicator_unit}
-                                  </span>
-                                )}
+                                <h4 className="font-medium text-gray-900">{p?.indicator_name_with_group || p?.indicator_name}</h4>
+                              {p?.indicator_unit && (
+                                <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                                  {p.indicator_unit}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <span>{p?.department_name}</span>
+                              <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                              <span>{p?.sector_name}</span>
+                            </div>
+                            <div className="mt-3 flex items-center gap-4">
+                              <div className="text-sm">
+                                <span className="text-gray-500">Annual Target: </span>
+                                <span className="font-medium">{p?.target || '0'}</span>
                               </div>
-                              <div className="flex items-center gap-4 text-sm text-gray-600">
-                                <span>{p?.department_name}</span>
-                                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                                <span>{p?.sector_name}</span>
-                              </div>
-                              <div className="mt-3 flex items-center gap-4">
-                                <div className="text-sm">
-                                  <span className="text-gray-500">Annual Target: </span>
-                                  <span className="font-medium">{p?.target || '0'}</span>
-                                </div>
-                              </div>
+                            </div>
                             </div>
                             <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                           </div>
@@ -592,7 +593,7 @@ export default function FinalApprovals() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <h4 className="font-medium text-gray-900">{p?.indicator_name}</h4>
+                              <h4 className="font-medium text-gray-900">{p?.indicator_name_with_group || p?.indicator_name}</h4>
                               {p?.indicator_unit && (
                                 <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
                                   {p.indicator_unit}

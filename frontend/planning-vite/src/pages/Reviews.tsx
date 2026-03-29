@@ -27,6 +27,7 @@ type AnnualPlan = {
   year: number;
   indicator: number;
   indicator_name: string;
+  indicator_name_with_group?: string;
   indicator_unit?: string;
   department_id?: number;
   department_name?: string;
@@ -244,7 +245,7 @@ export default function Reviews() {
     return byDept.filter((item) => {
       const p = planById[item.plan];
       const txt = [
-        p?.indicator_name,
+        p?.indicator_name_with_group || p?.indicator_name,
         p?.department_name,
         p?.sector_name,
         p?.indicator_unit,
@@ -325,7 +326,7 @@ export default function Reviews() {
         {
           id: `PF-${item.id}-EDITED-${Date.now()}`,
           time: new Date().toISOString(),
-          indicator_name: p?.indicator_name || 'Unknown indicator',
+          indicator_name: p?.indicator_name_with_group || p?.indicator_name || 'Unknown indicator',
           department_name: p?.department_name,
           item_type: 'PERFORMANCE',
           action: 'EDITED',
@@ -347,7 +348,7 @@ export default function Reviews() {
         {
           id: `BD-${b.id}-APPROVED-${Date.now()}`,
           time: new Date().toISOString(),
-          indicator_name: p?.indicator_name || 'Unknown indicator',
+          indicator_name: p?.indicator_name_with_group || p?.indicator_name || 'Unknown indicator',
           department_name: p?.department_name,
           item_type: 'BREAKDOWN',
           action: 'APPROVED',
@@ -373,7 +374,7 @@ export default function Reviews() {
         {
           id: `BD-${b.id}-REJECTED-${Date.now()}`,
           time: new Date().toISOString(),
-          indicator_name: p?.indicator_name || 'Unknown indicator',
+          indicator_name: p?.indicator_name_with_group || p?.indicator_name || 'Unknown indicator',
           department_name: p?.department_name,
           item_type: 'BREAKDOWN',
           action: 'REJECTED',
@@ -395,7 +396,7 @@ export default function Reviews() {
         {
           id: `PF-${pr.id}-APPROVED-${Date.now()}`,
           time: new Date().toISOString(),
-          indicator_name: p?.indicator_name || 'Unknown indicator',
+          indicator_name: p?.indicator_name_with_group || p?.indicator_name || 'Unknown indicator',
           department_name: p?.department_name,
           item_type: 'PERFORMANCE',
           action: 'APPROVED',
@@ -421,7 +422,7 @@ export default function Reviews() {
         {
           id: `PF-${pr.id}-REJECTED-${Date.now()}`,
           time: new Date().toISOString(),
-          indicator_name: p?.indicator_name || 'Unknown indicator',
+          indicator_name: p?.indicator_name_with_group || p?.indicator_name || 'Unknown indicator',
           department_name: p?.department_name,
           item_type: 'PERFORMANCE',
           action: 'REJECTED',
@@ -878,7 +879,7 @@ export default function Reviews() {
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
-                                <div className="font-medium text-gray-900">{p?.indicator_name}</div>
+                                <div className="font-medium text-gray-900">{p?.indicator_name_with_group || p?.indicator_name}</div>
                                 <div className="text-sm text-gray-500 mt-1">
                                   <span className="flex items-center gap-1">
                                     <Building className="w-3 h-3" />
@@ -1019,7 +1020,7 @@ export default function Reviews() {
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
-                                <div className="font-medium text-gray-900">{p?.indicator_name}</div>
+                                <div className="font-medium text-gray-900">{p?.indicator_name_with_group || p?.indicator_name}</div>
                                 <div className="text-sm text-gray-500 mt-1">
                                   <span className="flex items-center gap-1">
                                     <Building className="w-3 h-3" />

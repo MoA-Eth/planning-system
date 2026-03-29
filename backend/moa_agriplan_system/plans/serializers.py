@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import AnnualPlan, QuarterlyBreakdown, QuarterlyPerformance, FileAttachment, SubmissionWindow, AdvisorComment
+from indicators.serializers import IndicatorGroupSerializer
 
 
 class NullableDecimalField(serializers.DecimalField):
@@ -16,39 +17,51 @@ class NullableDecimalField(serializers.DecimalField):
 
 class AnnualPlanSerializer(serializers.ModelSerializer):
     indicator_name = serializers.CharField(source='indicator.name', read_only=True)
+    indicator_name_with_group = serializers.SerializerMethodField()
     department_id = serializers.IntegerField(source='indicator.department.id', read_only=True)
     department_name = serializers.CharField(source='indicator.department.name', read_only=True)
     sector_id = serializers.IntegerField(source='indicator.department.sector.id', read_only=True)
     sector_name = serializers.CharField(source='indicator.department.sector.name', read_only=True)
     indicator_unit = serializers.CharField(source='indicator.unit', read_only=True)
-    indicator_group_id = serializers.SerializerMethodField()
+    indicator_group = serializers.SerializerMethodField()
     indicator_group_name = serializers.SerializerMethodField()
     indicator_is_aggregatable = serializers.BooleanField(source='indicator.is_aggregatable', read_only=True)
+    indicator_is_incremental = serializers.BooleanField(source='indicator.is_incremental', read_only=True)
 
     class Meta:
         model = AnnualPlan
         fields = [
-            'id', 'year', 'indicator', 'indicator_name', 'indicator_unit',
-            'indicator_group_id', 'indicator_group_name', 'indicator_is_aggregatable',
+            'id', 'year', 'indicator', 'indicator_name', 'indicator_name_with_group', 'indicator_unit',
+            'indicator_group', 'indicator_group_name', 'indicator_is_aggregatable', 'indicator_is_incremental',
             'department_id', 'department_name', 'sector_id', 'sector_name',
             'target', 'created_by', 'created_at'
         ]
         read_only_fields = ['created_by', 'created_at']
 
-    def get_indicator_group_id(self, obj):
+    def get_indicator_group(self, obj):
         group = obj.indicator.groups.first()
-        return group.id if group else None
+        return IndicatorGroupSerializer(group).data if group else None
 
     def get_indicator_group_name(self, obj):
         group = obj.indicator.groups.first()
         return group.name if group else None
 
+    def get_indicator_name_with_group(self, obj):
+        """Return indicator name combined with group name for easy identification"""
+        group = obj.indicator.groups.first()
+        if group:
+            return f"{obj.indicator.name} ({group.name})"
+        return obj.indicator.name
+
 
 class QuarterlyBreakdownSerializer(serializers.ModelSerializer):
+    indicator_name = serializers.CharField(source='plan.indicator.name', read_only=True)
+    indicator_name_with_group = serializers.SerializerMethodField()
     total = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
     quarter_applicability = serializers.SerializerMethodField()
     quarter_values = serializers.SerializerMethodField()
     quarter_values_display = serializers.SerializerMethodField()
+    indicator_group = serializers.SerializerMethodField()
     
     # Use custom nullable decimal fields
     q1 = NullableDecimalField(max_digits=20, decimal_places=2, required=False, allow_null=True)
@@ -59,10 +72,11 @@ class QuarterlyBreakdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuarterlyBreakdown
         fields = [
-            'id', 'plan', 'q1', 'q2', 'q3', 'q4', 'total', 'status',
+            'id', 'plan', 'indicator_name', 'indicator_name_with_group', 'q1', 'q2', 'q3', 'q4', 'total', 'status',
             'submitted_by', 'submitted_at', 'reviewed_by', 'review_comment', 'reviewed_at',
             'validated_by', 'validated_at', 'final_approved_by', 'final_approved_at',
-            'quarter_applicability', 'quarter_values', 'quarter_values_display'
+            'quarter_applicability', 'quarter_values', 'quarter_values_display',
+            'indicator_group'
         ]
         read_only_fields = [
             'submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at',
@@ -105,6 +119,17 @@ class QuarterlyBreakdownSerializer(serializers.ModelSerializer):
             'q4': obj.get_quarter_value(4) if indicator.is_quarter_applicable(4) else None,
         }
 
+    def get_indicator_group(self, obj):
+        group = obj.plan.indicator.groups.first()
+        return IndicatorGroupSerializer(group).data if group else None
+
+    def get_indicator_name_with_group(self, obj):
+        """Return indicator name combined with group name for easy identification"""
+        group = obj.plan.indicator.groups.first()
+        if group:
+            return f"{obj.plan.indicator.name} ({group.name})"
+        return obj.plan.indicator.name
+
     # Do not enforce sum==target here; this will be checked during submit action
     # to allow drafting partial quarterly values.
     def validate(self, attrs):
@@ -145,15 +170,19 @@ class QuarterlyBreakdownSerializer(serializers.ModelSerializer):
 
 
 class QuarterlyPerformanceSerializer(serializers.ModelSerializer):
+    indicator_name = serializers.CharField(source='plan.indicator.name', read_only=True)
+    indicator_name_with_group = serializers.SerializerMethodField()
     value = NullableDecimalField(max_digits=20, decimal_places=2, required=False, allow_null=True)
     value_display = serializers.SerializerMethodField()
+    indicator_group = serializers.SerializerMethodField()
     
     class Meta:
         model = QuarterlyPerformance
         fields = [
-            'id', 'plan', 'quarter', 'value', 'value_display', 'status', 'variance_description',
+            'id', 'plan', 'quarter', 'indicator_name', 'indicator_name_with_group', 'value', 'value_display', 'status', 'variance_description',
             'submitted_by', 'submitted_at', 'reviewed_by', 'review_comment', 'reviewed_at',
-            'validated_by', 'validated_at', 'final_approved_by', 'final_approved_at'
+            'validated_by', 'validated_at', 'final_approved_by', 'final_approved_at',
+            'indicator_group'
         ]
         read_only_fields = [
             'submitted_by', 'submitted_at', 'reviewed_by', 'reviewed_at',
@@ -167,6 +196,17 @@ class QuarterlyPerformanceSerializer(serializers.ModelSerializer):
         if obj.value == 0:
             return '0.00'
         return f"{obj.value:.2f}"
+
+    def get_indicator_group(self, obj):
+        group = obj.plan.indicator.groups.first()
+        return IndicatorGroupSerializer(group).data if group else None
+
+    def get_indicator_name_with_group(self, obj):
+        """Return indicator name combined with group name for easy identification"""
+        group = obj.plan.indicator.groups.first()
+        if group:
+            return f"{obj.plan.indicator.name} ({group.name})"
+        return obj.plan.indicator.name
 
 
 class FileAttachmentSerializer(serializers.ModelSerializer):

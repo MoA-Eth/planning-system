@@ -21,7 +21,7 @@ from django.conf.urls.static import static
 from django.http import HttpResponse, JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
-from indicators.views import SectorViewSet, DepartmentViewSet, IndicatorViewSet, IndicatorGroupViewSet, state_minister_dashboard
+from indicators.views import SectorViewSet, DepartmentViewSet, IndicatorViewSet, IndicatorGroupViewSet, state_minister_dashboard, hierarchical_spreadsheet
 from users.views import MeView, UserViewSet, AdminStatsView, AdminTargetsBySectorView, AdminIndicatorsByDepartmentView, ActivityLogView, ChangePasswordView, MinisterDashboardView, IndicatorPerformanceView, IndicatorDetailView
 from plans.views import (
     AnnualPlanViewSet,
@@ -71,6 +71,7 @@ urlpatterns = [
     path('api/submission-windows/status/', submission_window_status, name='api-submission-window-status'),
     path('api/reviews/summary/', minister_review_summary, name='api-minister-review-summary'),
     path('api/reviews/submit-to-strategic/', submit_to_strategic, name='api-submit-to-strategic'),
+    path('api/hierarchical-spreadsheet/', hierarchical_spreadsheet, name='api-hierarchical-spreadsheet'),
     path('health/', health_check, name='health'),
     path('api/', api_check, name='api-check'),
     path('', include(router.urls)),

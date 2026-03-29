@@ -354,6 +354,30 @@ const MenuIcon = ({ name, active }: { name: string; active?: boolean }) => {
 
 
 
+    case 'Spreadsheet':
+
+
+
+      return (
+
+
+
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+
+
+
+          <path d="M3 3h18v18H3V3zm2 2v4h6V5H5zm8 0v4h6V5h-6zM5 11v4h6v-4H5zm8 0v4h6v-4h-6zM5 17v2h6v-2H5zm8 0v2h6v-2h-6z"/>
+
+
+
+        </svg>
+
+
+
+      );
+
+
+
     case 'Activity Log':
 
 
@@ -848,6 +872,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Spreadsheet', to: '/spreadsheet' },
+
+
+
     ];
 
 
@@ -868,6 +896,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Spreadsheet', to: '/spreadsheet' },
+
+
+
     ];
 
 
@@ -880,6 +912,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Spreadsheet', to: '/spreadsheet' },
+
+
+
     ];
 
 
@@ -889,6 +925,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
       { label: 'Final Approvals', to: '/final-approvals' },
+
+
+
+      { label: 'Spreadsheet', to: '/spreadsheet' },
 
 
 

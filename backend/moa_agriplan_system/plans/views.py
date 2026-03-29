@@ -445,10 +445,22 @@ class QuarterlyBreakdownViewSet(viewsets.ModelViewSet):
             
         if obj.status not in [PlanStatus.DRAFT, PlanStatus.REJECTED]:
             return Response({'detail': 'Only draft or rejected breakdowns can be submitted.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        # Note: Quarterly totals validation removed to allow submission regardless of mismatch
-        # Users can now submit plans even if quarterly totals don't match annual target
-        
+
+        # For non-incremental indicators, quarterly totals must match the annual target
+        indicator = obj.plan.indicator
+        if not indicator.is_incremental:
+            applicable_values = []
+            for quarter, value in [(1, obj.q1), (2, obj.q2), (3, obj.q3), (4, obj.q4)]:
+                if indicator.is_quarter_applicable(quarter):
+                    applicable_values.append(value or 0)
+            quarter_sum = sum(applicable_values)
+            annual_target = obj.plan.target
+            if abs(quarter_sum - annual_target) > 0.01:
+                return Response(
+                    {'detail': f'Quarter breakdown total ({quarter_sum:.2f}) must equal the annual plan target ({annual_target:.2f}). Please adjust the quarterly values before submitting.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Set status to SUBMITTED (goes directly to State Minister)
         # Advisors can still view and comment, but their verification is not required
         obj.status = PlanStatus.SUBMITTED

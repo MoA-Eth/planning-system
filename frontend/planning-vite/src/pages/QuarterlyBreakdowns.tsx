@@ -14,6 +14,7 @@ type AnnualPlan = {
   indicator_name: string;
   indicator_unit?: string;
   indicator_group_name?: string | null;
+  indicator_is_incremental?: boolean;
   department_id?: number;
   department_name?: string;
   sector_id?: number;
@@ -116,13 +117,15 @@ export default function QuarterlyBreakdowns() {
     return st === 'DRAFT' || st === 'REJECTED';
   };
 
-  const canSubmitPlan = (planId?: number): boolean => {
+  const canSubmitPlan = (planId?: number, plan?: AnnualPlan): boolean => {
     const role = (user?.role || '').toUpperCase();
     if (!planWindowOpen) return false;
     if (role !== 'LEAD_EXECUTIVE_BODY') return false;
     if (!planId) return true;
     const st = (breakdowns[planId]?.status || 'DRAFT').toUpperCase();
-    return st === 'DRAFT' || st === 'REJECTED';
+    if (st !== 'DRAFT' && st !== 'REJECTED') return false;
+    if (plan && !plan.indicator_is_incremental && planMismatch(plan)) return false;
+    return true;
   };
 
   const statusBadge = (status?: string) => {
@@ -331,6 +334,7 @@ export default function QuarterlyBreakdowns() {
   };
 
   const planMismatch = (p: AnnualPlan): boolean => {
+    if (p.indicator_is_incremental) return false;
     const bd = breakdowns[p.id];
     const total = planTotal(bd);
     const target = parseFloat(p.target || '0');
@@ -441,10 +445,11 @@ export default function QuarterlyBreakdowns() {
                   Save Plan
                 </button>
                 <button
-                  disabled={!canSubmitPlan(p.id)}
-                  onClick={() => canSubmitPlan(p.id) && submitPlan(p.id)}
+                  disabled={!canSubmitPlan(p.id, p)}
+                  title={!p.indicator_is_incremental && planMismatch(p) ? `Quarter total (${planTotal(bd).toFixed(2)}) must equal annual target (${p.target}) before submitting` : undefined}
+                  onClick={() => canSubmitPlan(p.id, p) && submitPlan(p.id)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    canSubmitPlan(p.id)
+                    canSubmitPlan(p.id, p)
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                       : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   }`}

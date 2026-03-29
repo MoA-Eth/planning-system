@@ -555,3 +555,241 @@ def state_minister_dashboard(request):
         'department_performance': department_performance,
         'quarterly_trends': quarterly_trends,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def hierarchical_spreadsheet(request):
+    """
+    Return hierarchical spreadsheet data for plan or performance view.
+    Access restricted to: STATE_MINISTER, LEAD_EXECUTIVE_BODY, STRATEGIC_STAFF, EXECUTIVE.
+    Query params:
+      - year (required): Gregorian year
+      - sector_id (optional): sector to filter (STRATEGIC_STAFF / EXECUTIVE only)
+      - view_type: 'plan' (default) or 'performance'
+    """
+    user = request.user
+    role = getattr(user, 'role', '').upper()
+    is_super = getattr(user, 'is_superuser', False)
+
+    # ── Role gate ─────────────────────────────────────────────────────────────
+    ALLOWED_ROLES = ('STATE_MINISTER', 'LEAD_EXECUTIVE_BODY', 'STRATEGIC_STAFF', 'EXECUTIVE')
+    if not is_super and role not in ALLOWED_ROLES:
+        return Response({'detail': 'You do not have permission to access the spreadsheet.'}, status=status.HTTP_403_FORBIDDEN)
+
+    year = request.query_params.get('year')
+    view_type = request.query_params.get('view_type', 'plan')
+
+    if not year:
+        return Response({'detail': 'year is required'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        year = int(year)
+    except ValueError:
+        return Response({'detail': 'Invalid year'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ── Resolve scope based on role ───────────────────────────────────────────
+    # filter_sector_ids : list of sector ids the user may see
+    # filter_department_id : specific department for LEAD_EXECUTIVE_BODY
+    filter_sector_ids = []
+    filter_department_id = None
+
+    if is_super or role in ('STRATEGIC_STAFF', 'EXECUTIVE'):
+        # Can see all sectors; optionally filter by sector_id param
+        req_sector = request.query_params.get('sector_id')
+        if req_sector:
+            filter_sector_ids = [int(req_sector)]
+        else:
+            filter_sector_ids = list(StateMinisterSector.objects.values_list('id', flat=True))
+    elif role == 'STATE_MINISTER':
+        user_sector = getattr(user, 'sector', None)
+        if user_sector:
+            filter_sector_ids = [user_sector.id]
+        else:
+            return Response({'detail': 'No sector assigned to your account.'}, status=status.HTTP_400_BAD_REQUEST)
+    elif role == 'LEAD_EXECUTIVE_BODY':
+        user_dept = getattr(user, 'department', None)
+        if user_dept:
+            filter_department_id = user_dept.id
+            filter_sector_ids = [user_dept.sector_id]
+        else:
+            return Response({'detail': 'No department assigned to your account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not filter_sector_ids:
+        return Response({'detail': 'No sector found for user'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # ── Pre-fetch bulk data ───────────────────────────────────────────────────
+    plan_qs = AnnualPlan.objects.filter(year=year).select_related('indicator')
+    bd_qs = QuarterlyBreakdown.objects.filter(plan__year=year).select_related('plan')
+    perf_qs = QuarterlyPerformance.objects.filter(plan__year=year).select_related('plan')
+
+    all_plans = {ap.indicator_id: ap for ap in plan_qs}
+    all_breakdowns = {bd.plan.indicator_id: bd for bd in bd_qs}
+    all_perfs = {}
+    for perf in perf_qs:
+        all_perfs[(perf.plan.indicator_id, perf.quarter)] = perf
+
+    # ── Helper: build one indicator row ───────────────────────────────────────
+    def indicator_row(indicator):
+        plan = all_plans.get(indicator.id)
+        bd = all_breakdowns.get(indicator.id)
+        dept = indicator.department
+        row = {
+            'type': 'indicator',
+            'id': indicator.id,
+            'name': indicator.name,
+            'unit': indicator.get_effective_unit(),
+            'baseline': float(indicator.baseline) if indicator.baseline is not None else None,
+            'is_aggregatable': indicator.is_aggregatable,
+            'is_label': False,
+            'annual_target': float(plan.target) if plan else None,
+            'sector_name': dept.sector.name if dept and dept.sector else '',
+            'department_name': dept.name if dept else '',
+        }
+        if view_type == 'plan':
+            for q in range(1, 5):
+                if not indicator.is_quarter_applicable(q):
+                    row[f'q{q}'] = None
+                    row[f'q{q}_display'] = 'N/A'
+                elif bd:
+                    val = getattr(bd, f'q{q}')
+                    row[f'q{q}'] = float(val) if val is not None else None
+                    row[f'q{q}_display'] = f'{val:.2f}' if val is not None else 'N/A'
+                else:
+                    row[f'q{q}'] = None
+                    row[f'q{q}_display'] = '-'
+            row['breakdown_status'] = bd.status if bd else None
+        else:
+            for q in range(1, 5):
+                if not indicator.is_quarter_applicable(q):
+                    row[f'q{q}'] = None
+                    row[f'q{q}_display'] = 'N/A'
+                else:
+                    perf = all_perfs.get((indicator.id, q))
+                    if perf and perf.value is not None:
+                        row[f'q{q}'] = float(perf.value)
+                        row[f'q{q}_display'] = f'{perf.value:.2f}'
+                    elif perf and perf.value is None:
+                        row[f'q{q}'] = None
+                        row[f'q{q}_display'] = 'N/A'
+                    else:
+                        row[f'q{q}'] = None
+                        row[f'q{q}_display'] = '-'
+                row[f'q{q}_status'] = all_perfs.get((indicator.id, q), None)
+                if row[f'q{q}_status']:
+                    row[f'q{q}_status'] = row[f'q{q}_status'].status
+        return row
+
+    # ── Helper: resolve sector/department name for a group ────────────────────
+    def group_context(group):
+        if group.department:
+            return group.department.sector.name if group.department.sector else '', group.department.name
+        if group.sector:
+            return group.sector.name, ''
+        return '', ''
+
+    # ── Recursive tree builder ────────────────────────────────────────────────
+    def build_tree(groups):
+        result = []
+        for group in groups:
+            # If LEAD_EXECUTIVE_BODY, skip groups not in their department
+            if filter_department_id:
+                dept_id = group.department_id
+                if dept_id and dept_id != filter_department_id:
+                    continue
+
+            children_data = build_tree(group.children.all())
+            indicators = list(group.indicators.select_related('department__sector').all())
+            # If LEAD_EXECUTIVE_BODY, filter indicators to their department
+            if filter_department_id:
+                indicators = [i for i in indicators if i.department_id == filter_department_id]
+
+            indicator_rows = [indicator_row(ind) for ind in indicators]
+
+            sec_name, dept_name = group_context(group)
+
+            group_row = {
+                'type': 'group',
+                'id': group.id,
+                'name': group.name,
+                'unit': group.get_inherited_unit(),
+                'baseline': None,
+                'is_aggregatable': False,
+                'is_label': group.is_label,
+                'annual_target': None,
+                'sector_name': sec_name,
+                'department_name': dept_name,
+                'q1': None, 'q2': None, 'q3': None, 'q4': None,
+                'q1_display': '', 'q2_display': '', 'q3_display': '', 'q4_display': '',
+                'children': children_data,
+                'indicators': indicator_rows,
+            }
+
+            if not group.is_label:
+                agg_rows = [r for r in indicator_rows if r['is_aggregatable']]
+                child_groups = [c for c in children_data if not c['is_label']]
+
+                target_parts = [r['annual_target'] for r in agg_rows if r['annual_target'] is not None]
+                target_parts += [c['annual_target'] for c in child_groups if c['annual_target'] is not None]
+                if target_parts:
+                    group_row['annual_target'] = sum(target_parts)
+
+                bl_parts = [r['baseline'] for r in agg_rows if r['baseline'] is not None]
+                bl_parts += [c['baseline'] for c in child_groups if c['baseline'] is not None]
+                if bl_parts:
+                    group_row['baseline'] = sum(bl_parts)
+
+                for q in range(1, 5):
+                    qk = f'q{q}'
+                    parts = [r[qk] for r in agg_rows if r[qk] is not None]
+                    parts += [c[qk] for c in child_groups if c[qk] is not None]
+                    if parts:
+                        group_row[qk] = sum(parts)
+                        group_row[f'{qk}_display'] = f'{group_row[qk]:.2f}'
+
+            # Only include group if it has children or indicators after filtering
+            if children_data or indicator_rows:
+                result.append(group_row)
+
+        return result
+
+    # ── Build root query ──────────────────────────────────────────────────────
+    group_filter = Q(parent__isnull=True) & (
+        Q(department__sector_id__in=filter_sector_ids) | Q(sector_id__in=filter_sector_ids)
+    )
+    if filter_department_id:
+        group_filter = Q(parent__isnull=True) & (
+            Q(department_id=filter_department_id) | Q(sector_id__in=filter_sector_ids)
+        )
+
+    root_groups = IndicatorGroup.objects.filter(
+        group_filter
+    ).select_related('department__sector', 'sector').prefetch_related(
+        'children', 'indicators'
+    ).distinct()
+
+    tree = build_tree(root_groups)
+
+    # Ungrouped indicators
+    ungrouped_filter = Q(groups__isnull=True, department__sector_id__in=filter_sector_ids)
+    if filter_department_id:
+        ungrouped_filter = Q(groups__isnull=True, department_id=filter_department_id)
+    ungrouped = Indicator.objects.filter(
+        ungrouped_filter
+    ).select_related('department__sector')
+    ungrouped_rows = [indicator_row(ind) for ind in ungrouped]
+
+    # Sectors list: full list for STRATEGIC_STAFF/EXECUTIVE, single for others
+    if is_super or role in ('STRATEGIC_STAFF', 'EXECUTIVE'):
+        sectors = list(StateMinisterSector.objects.values('id', 'name').order_by('name'))
+    else:
+        sectors = list(StateMinisterSector.objects.filter(id__in=filter_sector_ids).values('id', 'name'))
+
+    return Response({
+        'year': year,
+        'sector_id': filter_sector_ids[0] if len(filter_sector_ids) == 1 else None,
+        'view_type': view_type,
+        'role': role,
+        'sectors': sectors,
+        'tree': tree,
+        'ungrouped': ungrouped_rows,
+    })

@@ -31,6 +31,7 @@ type AnnualPlan = {
   year: number;
   indicator: number;
   indicator_name: string;
+  indicator_name_with_group?: string;
   indicator_unit?: string;
   department_id?: number;
   department_name?: string;
@@ -60,7 +61,7 @@ type Performance = {
 
 export default function Validations() {
   const { user } = useAuth();
-  const currentYear = currentEthiopianYear;
+  const currentYear = currentEthiopianYear();
   const [etYear, setEtYear] = useState<number | null>(currentYear);
   const [plans, setPlans] = useState<AnnualPlan[]>([]);
   const [breakdowns, setBreakdowns] = useState<Breakdown[]>([]);
@@ -153,7 +154,7 @@ export default function Validations() {
 
     return byDept.filter(b => {
       const p = planById[b.plan];
-      const txt = [p.indicator_name, p.department_name, p.sector_name, p.indicator_unit]
+      const txt = [p.indicator_name_with_group || p.indicator_name, p.department_name, p.sector_name, p.indicator_unit]
         .join(' ')
         .toLowerCase();
       return txt.includes(q);
@@ -181,7 +182,7 @@ export default function Validations() {
 
     return byDept.filter(pr => {
       const p = planById[pr.plan];
-      const txt = [p.indicator_name, p.department_name, p.sector_name, p.indicator_unit]
+      const txt = [p.indicator_name_with_group || p.indicator_name, p.department_name, p.sector_name, p.indicator_unit]
         .join(' ')
         .toLowerCase();
       return txt.includes(q);
@@ -646,7 +647,7 @@ export default function Validations() {
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
-                                <div className="font-medium text-gray-900">{p?.indicator_name}</div>
+                                <div className="font-medium text-gray-900">{p?.indicator_name_with_group || p?.indicator_name}</div>
                                 <div className="text-sm text-gray-500 mt-1">
                                   <span className="flex items-center gap-1">
                                     <Building className="w-3 h-3" />
@@ -782,7 +783,7 @@ export default function Validations() {
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
-                                <div className="font-medium text-gray-900">{p?.indicator_name}</div>
+                                <div className="font-medium text-gray-900">{p?.indicator_name_with_group || p?.indicator_name}</div>
                                 <div className="text-sm text-gray-500 mt-1">
                                   <span className="flex items-center gap-1">
                                     <Building className="w-3 h-3" />
@@ -925,7 +926,7 @@ export default function Validations() {
                   {plans.map((p) => (
                     <tr key={p.id} className="hover:bg-gray-50 transition-colors duration-150">
                       <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">{p.indicator_name}</div>
+                        <div className="font-medium text-gray-900">{p.indicator_name_with_group || p.indicator_name}</div>
                         {p.indicator_unit && (
                           <span className="inline-block mt-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
                             Unit: {p.indicator_unit}

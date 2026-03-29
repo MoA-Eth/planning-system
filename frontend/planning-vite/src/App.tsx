@@ -59,6 +59,8 @@ import OverallDashboard from './pages/OverallDashboard'
 
 import DetailAnalysis from './pages/DetailAnalysis'
 
+import HierarchicalSpreadsheet from './pages/HierarchicalSpreadsheet'
+
 import { useAuth } from './context/AuthContext'
 
 
@@ -538,6 +540,26 @@ function App() {
             <DashboardLayout>
 
               <ProfilePage />
+
+            </DashboardLayout>
+
+          </ProtectedRoute>
+
+        }
+
+      />
+
+      <Route
+
+        path="/spreadsheet"
+
+        element={
+
+          <ProtectedRoute>
+
+            <DashboardLayout>
+
+              <HierarchicalSpreadsheet />
 
             </DashboardLayout>
 
