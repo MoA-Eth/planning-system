@@ -55,6 +55,12 @@ import AdvisorCommentSubmit from './pages/AdvisorCommentSubmit'
 
 import AdvisorCommentsView from './pages/AdvisorCommentsView'
 
+import DocumentUpload from './pages/DocumentUpload'
+
+import DocumentsView from './pages/DocumentsView'
+
+import DocumentUploadRoute from './routes/DocumentUploadRoute'
+
 import OverallDashboard from './pages/OverallDashboard'
 
 import DetailAnalysis from './pages/DetailAnalysis'
@@ -580,6 +586,46 @@ function App() {
             <DetailAnalysis />
 
           </MinisterRoute>
+
+        }
+
+      />
+
+      <Route
+
+        path="/document-upload"
+
+        element={
+
+          <DocumentUploadRoute>
+
+            <DashboardLayout>
+
+              <DocumentUpload />
+
+            </DashboardLayout>
+
+          </DocumentUploadRoute>
+
+        }
+
+      />
+
+      <Route
+
+        path="/documents"
+
+        element={
+
+          <ProtectedRoute>
+
+            <DashboardLayout>
+
+              <DocumentsView />
+
+            </DashboardLayout>
+
+          </ProtectedRoute>
 
         }
 

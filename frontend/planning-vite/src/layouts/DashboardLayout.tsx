@@ -474,6 +474,54 @@ const MenuIcon = ({ name, active }: { name: string; active?: boolean }) => {
 
 
 
+    case 'Document Upload':
+
+
+
+      return (
+
+
+
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+
+
+
+          <path d="M9 16h6v-6h4l-7-7-7 7h4v6Zm-4 2h14v2H5v-2Z"/>
+
+
+
+        </svg>
+
+
+
+      );
+
+
+
+    case 'Documents':
+
+
+
+      return (
+
+
+
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+
+
+
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm-1 1.5L18.5 9H13V3.5ZM8 13h8v1.5H8V13Zm0 3h5v1.5H8V16Zm0-6h3v1.5H8V10Z"/>
+
+
+
+        </svg>
+
+
+
+      );
+
+
+
     default:
 
 
@@ -529,272 +577,88 @@ const MobileMenu = ({
   onClose 
 
 
-
 }: { 
-
-
 
   menus: Array<{label: string; to: string}>;
 
-
-
   isOpen: boolean;
-
-
 
   onClose: () => void;
 
-
-
 }) => {
 
-
-
   const location = useLocation();
-
-
-
-
-
-
 
   if (!isOpen) return null;
 
-
-
-
-
-
-
   return (
-
-
-
     <div className="fixed inset-0 z-50 md:hidden">
-
-
-
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-
-
-
       <div className="fixed left-0 top-0 h-full w-72 bg-gradient-to-b from-[#0f4a2c] to-[#1a7a45] text-white shadow-2xl">
-
-
-
         <div className="h-16 px-5 flex items-center justify-between border-b border-white/10">
-
-
-
           <div className="flex items-center gap-2.5">
-
-
-
             <img src={logo} alt="Logo" className="h-8 w-8 object-contain rounded-lg bg-white/95 p-0.5" />
-
-
-
             <span className="font-semibold text-sm text-white/95">MoA Planning</span>
-
-
-
           </div>
-
-
-
           <button
-
-
-
             onClick={onClose}
-
-
-
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-
-
-
           >
-
-
-
             <svg className="w-4 h-4 text-white/60" fill="currentColor" viewBox="0 0 24 24">
-
-
-
               <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-
-
-
             </svg>
-
-
-
           </button>
-
-
-
         </div>
-
-
-
         <nav className="px-3 py-4 space-y-0.5 overflow-y-auto">
-
-
-
           {menus.map((menu) => {
-
-
-
             const active = location.pathname === menu.to;
-
-
-
             return (
-
-
-
               <Link
-
-
-
                 key={menu.to}
-
-
-
                 to={menu.to}
-
-
-
                 onClick={onClose}
-
-
-
                 className={`relative flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${
-
-
-
                   active 
-
-
-
                     ? 'bg-white/15 text-white font-medium shadow-sm' 
-
-
-
                     : 'text-white/65 hover:bg-white/8 hover:text-white/90'
-
-
-
                 }`}
-
-
-
               >
-
-
-
                 {active && (
-
-
-
                   <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-emerald-300" />
-
-
-
                 )}
-
-
-
                 <MenuIcon name={menu.label} active={active} />
-
-
-
                 <span className="text-sm">{menu.label}</span>
-
-
-
               </Link>
-
-
-
             );
-
-
-
           })}
-
-
-
         </nav>
-
-
-
       </div>
-
-
-
     </div>
-
-
-
   );
-
-
-
 };
 
-
-
-
-
-
-
 export default function DashboardLayout({ children }: PropsWithChildren) {
-
-
-
   const { user, logout } = useAuth();
-
-
 
   const role = (user?.role || '').toUpperCase();
 
-
-
   const isSuper = !!user?.is_superuser;
-
-
 
   const location = useLocation();
 
-
-
   const [collapsed, setCollapsed] = useState(false);
-
-
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-
-
-
-
-
-
-  // Menu items based on role
-
-
-
   const menus = useMemo(() => {
-
-
-
     const common = [
-
       { label: 'Home', to: '/' },
 
+
+
       { label: 'Profile', to: '/profile' },
+
+
 
     ];
 
@@ -852,6 +716,14 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Document Upload', to: '/document-upload' },
+
+
+
+      { label: 'Documents', to: '/documents' },
+
+
+
     ];
 
 
@@ -873,6 +745,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
       { label: 'Spreadsheet', to: '/spreadsheet' },
+
+
+
+      { label: 'Document Upload', to: '/document-upload' },
 
 
 
@@ -900,6 +776,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Documents', to: '/documents' },
+
+
+
     ];
 
 
@@ -916,6 +796,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Documents', to: '/documents' },
+
+
+
     ];
 
 
@@ -929,6 +813,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
       { label: 'Spreadsheet', to: '/spreadsheet' },
+
+
+
+      { label: 'Documents', to: '/documents' },
 
 
 

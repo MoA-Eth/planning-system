@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AnnualPlan, QuarterlyBreakdown, QuarterlyPerformance, FileAttachment, SubmissionWindow, AdvisorComment
+from .models import AnnualPlan, QuarterlyBreakdown, QuarterlyPerformance, FileAttachment, SubmissionWindow, AdvisorComment, Document
 from indicators.serializers import IndicatorGroupSerializer
 
 
@@ -233,3 +233,42 @@ class AdvisorCommentSerializer(serializers.ModelSerializer):
             'id', 'author', 'author_username', 'year', 'sector', 'department', 'comment', 'created_at'
         ]
         read_only_fields = ['author', 'created_at']
+
+
+class DocumentSerializer(serializers.ModelSerializer):
+    uploaded_by_username = serializers.CharField(source='uploaded_by.username', read_only=True)
+    document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
+    sector_name = serializers.CharField(source='sector.name', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    quarter_display = serializers.CharField(source='get_quarter_display', read_only=True)
+    file_url = serializers.SerializerMethodField()
+    file_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Document
+        fields = [
+            'id', 'name', 'description', 'document_type', 'document_type_display',
+            'sector', 'sector_name', 'department', 'department_name',
+            'year', 'quarter', 'quarter_display',
+            'file', 'file_url', 'file_name', 'uploaded_by', 'uploaded_by_username', 'uploaded_at'
+        ]
+        read_only_fields = ['uploaded_by', 'uploaded_at', 'sector', 'department']
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url if obj.file else None
+
+    def validate_file(self, value):
+        import os
+        ext = os.path.splitext(value.name)[1].lower()
+        if ext not in ['.doc', '.docx']:
+            raise serializers.ValidationError('Only Word documents (.doc, .docx) are allowed.')
+        return value
+
+    def get_file_name(self, obj):
+        if obj.file:
+            import os
+            return os.path.basename(obj.file.name)
+        return None

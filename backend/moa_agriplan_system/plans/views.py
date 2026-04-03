@@ -15,6 +15,7 @@ from .models import (
     within_annual_breakdown_window,
     within_quarter_submission_window,
     AdvisorComment,
+    Document,
 )
 from .serializers import (
     AnnualPlanSerializer,
@@ -23,6 +24,7 @@ from .serializers import (
     FileAttachmentSerializer,
     SubmissionWindowSerializer,
     AdvisorCommentSerializer,
+    DocumentSerializer,
 )
 
 class SuperuserWritePermission(permissions.BasePermission):
@@ -911,3 +913,83 @@ class AdvisorCommentViewSet(viewsets.ModelViewSet):
         sector = data.get('sector') or getattr(user, 'sector', None)
         department = data.get('department') or getattr(user, 'department', None)
         serializer.save(author=user, sector=sector, department=department)
+
+
+class DocumentPermission(permissions.BasePermission):
+    UPLOAD_ROLES = {'LEAD_EXECUTIVE_BODY', 'ADVISOR'}
+    VIEW_ROLES = {'LEAD_EXECUTIVE_BODY', 'ADVISOR', 'STATE_MINISTER', 'STRATEGIC_STAFF', 'EXECUTIVE', 'MINISTER_VIEW'}
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = getattr(request.user, 'role', '').upper()
+        if request.method in permissions.SAFE_METHODS:
+            return role in self.VIEW_ROLES
+        return role in self.UPLOAD_ROLES
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        role = getattr(request.user, 'role', '').upper()
+        if request.method in permissions.SAFE_METHODS:
+            return role in self.VIEW_ROLES
+        # Only uploader or superuser can modify/delete
+        return obj.uploaded_by == request.user
+
+
+class DocumentViewSet(viewsets.ModelViewSet):
+    queryset = Document.objects.select_related('uploaded_by', 'sector', 'department').all()
+    serializer_class = DocumentSerializer
+    permission_classes = [DocumentPermission]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        role = getattr(user, 'role', '').upper()
+        if role not in DocumentPermission.UPLOAD_ROLES and not user.is_superuser:
+            raise permissions.PermissionDenied('Only Lead Executive Body or Advisors can upload documents.')
+        sector = getattr(user, 'sector', None)
+        department = getattr(user, 'department', None)
+        serializer.save(uploaded_by=user, sector=sector, department=department)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        role = getattr(user, 'role', '').upper()
+        if not user.is_superuser:
+            if role == 'STATE_MINISTER':
+                sector_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+                if sector_id:
+                    qs = qs.filter(sector_id=sector_id)
+            elif role == 'LEAD_EXECUTIVE_BODY':
+                dept_id = getattr(getattr(user, 'department', None), 'id', None) or getattr(user, 'department', None)
+                if dept_id:
+                    qs = qs.filter(department_id=dept_id)
+            elif role == 'ADVISOR':
+                sector_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+                if sector_id:
+                    qs = qs.filter(sector_id=sector_id)
+        sector_filter = self.request.query_params.get('sector')
+        if sector_filter:
+            qs = qs.filter(sector_id=sector_filter)
+        dept_filter = self.request.query_params.get('department')
+        if dept_filter:
+            qs = qs.filter(department_id=dept_filter)
+        doc_type = self.request.query_params.get('document_type')
+        if doc_type:
+            qs = qs.filter(document_type=doc_type)
+        year = self.request.query_params.get('year')
+        if year:
+            qs = qs.filter(year=year)
+        quarter = self.request.query_params.get('quarter')
+        if quarter:
+            qs = qs.filter(quarter=quarter)
+        return qs

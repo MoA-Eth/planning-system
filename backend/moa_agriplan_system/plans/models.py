@@ -121,6 +121,41 @@ class FileAttachment(models.Model):
     description = models.CharField(max_length=255, blank=True)
 
 
+class Document(models.Model):
+    class DocumentType(models.TextChoices):
+        REPORT = 'REPORT', 'Report'
+        NARATIVE = 'NARATIVE', 'Narative'
+        POLICY = 'POLICY', 'Policy'
+        GUIDELINE = 'GUIDELINE', 'Guideline'
+        PLAN = 'PLAN', 'Plan'
+        DIRECTIVE = 'DIRECTIVE', 'Directive'
+        CIRCULAR = 'CIRCULAR', 'Circular'
+        OTHER = 'OTHER', 'Other'
+
+    class Quarter(models.TextChoices):
+        Q1 = 'Q1', 'Quarter 1'
+        Q2 = 'Q2', 'Quarter 2'
+        Q3 = 'Q3', 'Quarter 3'
+        Q4 = 'Q4', 'Quarter 4'
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    document_type = models.CharField(max_length=32, choices=DocumentType.choices, default=DocumentType.OTHER)
+    file = models.FileField(upload_to='documents/%Y/%m/%d/')
+    sector = models.ForeignKey('indicators.StateMinisterSector', on_delete=models.PROTECT, related_name='documents')
+    department = models.ForeignKey('indicators.Department', on_delete=models.PROTECT, null=True, blank=True, related_name='documents')
+    year = models.PositiveIntegerField(null=True, blank=True, help_text='Ethiopian fiscal year (e.g. 2017)')
+    quarter = models.CharField(max_length=2, choices=Quarter.choices, null=True, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_documents')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.get_document_type_display()})"
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+
 class AdvisorComment(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='advisor_comments')
     year = models.PositiveIntegerField(null=True, blank=True)
