@@ -15,7 +15,8 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import HttpResponse, JsonResponse
@@ -30,6 +31,7 @@ from plans.views import (
     FileAttachmentViewSet,
     SubmissionWindowViewSet,
     AdvisorCommentViewSet,
+    DocumentViewSet,
     submission_window_status,
     submit_to_strategic,
     minister_review_summary,
@@ -54,6 +56,7 @@ router.register(r'api/attachments', FileAttachmentViewSet, basename='attachment'
 router.register(r'api/users', UserViewSet, basename='user')
 router.register(r'api/submission-windows', SubmissionWindowViewSet, basename='submissionwindow')
 router.register(r'api/advisor-comments', AdvisorCommentViewSet, basename='advisorcomment')
+router.register(r'api/documents', DocumentViewSet, basename='document')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -77,5 +80,6 @@ urlpatterns = [
     path('', include(router.urls)),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
