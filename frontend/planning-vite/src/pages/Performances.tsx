@@ -880,9 +880,9 @@ export default function Performances() {
                 </button>
                 
                 <button
-                  disabled={!canEditPerformance(perfModal.planId, perfModal.quarter)}
+                  disabled={!canEditPerformance(perfModal.planId, perfModal.quarter) || perfModal.value.trim() === ''}
                   onClick={() => {
-                    if (perfModal.planId && perfModal.quarter) {
+                    if (perfModal.planId && perfModal.quarter && perfModal.value.trim() !== '') {
                       savePerformance(perfModal.planId, perfModal.quarter, perfModal.value);
                     }
                     setPerfModal({ 
@@ -897,7 +897,7 @@ export default function Performances() {
                     });
                   }}
                   className={`px-5 py-2.5 rounded-xl transition-colors shadow-sm ${
-                    canEditPerformance(perfModal.planId, perfModal.quarter)
+                    canEditPerformance(perfModal.planId, perfModal.quarter) && perfModal.value.trim() !== ''
                       ? 'bg-blue-600 text-white hover:bg-blue-700'
                       : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   }`}
@@ -906,9 +906,9 @@ export default function Performances() {
                 </button>
 
                 <button
-                  disabled={!canSubmitPerformance()}
+                  disabled={!canSubmitPerformance() || perfModal.value.trim() === ''}
                   onClick={() => {
-                    if (canSubmitPerformance() && perfModal.planId && perfModal.quarter) {
+                    if (canSubmitPerformance() && perfModal.planId && perfModal.quarter && perfModal.value.trim() !== '') {
                       submitPerformance(perfModal.planId, perfModal.quarter, perfModal.value);
                     }
                     setPerfModal({ 
@@ -923,7 +923,7 @@ export default function Performances() {
                     });
                   }}
                   className={`px-5 py-2.5 rounded-xl transition-colors shadow-sm ${
-                    canSubmitPerformance()
+                    canSubmitPerformance() && perfModal.value.trim() !== ''
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                       : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   }`}
@@ -1026,9 +1026,8 @@ export default function Performances() {
 
     const openPerfModal = (q: 1|2|3|4) => {
       const existing = String(perfQ(q) || '').trim();
-      const fallback = String(planQ(q) || '').trim();
-      // If performance is N/A, use empty string for input; otherwise use existing or fallback
-      const initial = existing === 'N/A' ? '' : (existing !== '' ? existing : (fallback !== 'N/A' ? fallback : ''));
+      // If performance is N/A or empty, use empty string for input; otherwise use existing value
+      const initial = existing === 'N/A' ? '' : existing;
       setPerfModal({ 
         open: true, 
         planId: p.id, 
