@@ -9,7 +9,7 @@ from django.utils import timezone
 from .models import User
 from .serializers import UserSerializer, ProfileSerializer
 from indicators.models import Indicator, StateMinisterSector, Department, IndicatorGroup
-from plans.models import AnnualPlan, QuarterlyBreakdown, QuarterlyPerformance, PlanStatus, PerformanceStatus
+from plans.models import AnnualPlan, QuarterlyBreakdown, QuarterlyPerformance, PlanStatus, PerformanceStatus, AdminEditLog
 
 
 class IsSuperAdmin(permissions.BasePermission):
@@ -255,7 +255,21 @@ class ActivityLogView(APIView):
                     'comment': '',
                 })
 
-        events = bd_events + perf_events
+        admin_events = []
+        for log in AdminEditLog.objects.select_related('edited_by').all():
+            admin_events.append({
+                'type': 'ADMIN_EDIT',
+                'action': log.record_type,
+                'by': getattr(log.edited_by, 'username', None),
+                'at': log.edited_at,
+                'status': log.new_value,
+                'indicator': log.indicator_name,
+                'sector': log.sector_name or None,
+                'department': log.department_name or None,
+                'comment': f'Q{log.quarter}: {log.old_value} → {log.new_value}' if log.quarter else f'{log.old_value} → {log.new_value}',
+            })
+
+        events = bd_events + perf_events + admin_events
         events.sort(key=lambda e: e['at'] or 0, reverse=True)
         events = events[:limit]
 

@@ -35,6 +35,8 @@ from plans.views import (
     submission_window_status,
     submit_to_strategic,
     minister_review_summary,
+    superadmin_quarterly_data,
+    superadmin_update_quarterly,
 )
 
 # Health check views
@@ -75,6 +77,8 @@ urlpatterns = [
     path('api/reviews/summary/', minister_review_summary, name='api-minister-review-summary'),
     path('api/reviews/submit-to-strategic/', submit_to_strategic, name='api-submit-to-strategic'),
     path('api/hierarchical-spreadsheet/', hierarchical_spreadsheet, name='api-hierarchical-spreadsheet'),
+    path('api/superadmin/quarterly-data/', superadmin_quarterly_data, name='api-superadmin-quarterly-data'),
+    path('api/superadmin/update-quarterly/', superadmin_update_quarterly, name='api-superadmin-update-quarterly'),
     path('health/', health_check, name='health'),
     path('api/', api_check, name='api-check'),
     path('', include(router.urls)),

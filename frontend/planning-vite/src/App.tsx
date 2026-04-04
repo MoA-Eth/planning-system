@@ -67,6 +67,8 @@ import DetailAnalysis from './pages/DetailAnalysis'
 
 import HierarchicalSpreadsheet from './pages/HierarchicalSpreadsheet'
 
+import SuperAdminQuarterlyManager from './pages/SuperAdminQuarterlyManager'
+
 import { useAuth } from './context/AuthContext'
 
 
@@ -550,6 +552,26 @@ function App() {
             </DashboardLayout>
 
           </ProtectedRoute>
+
+        }
+
+      />
+
+      <Route
+
+        path="/superadmin-quarterly"
+
+        element={
+
+          <SuperuserRoute>
+
+            <DashboardLayout>
+
+              <SuperAdminQuarterlyManager />
+
+            </DashboardLayout>
+
+          </SuperuserRoute>
 
         }
 

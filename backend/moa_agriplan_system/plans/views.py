@@ -993,3 +993,261 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if quarter:
             qs = qs.filter(quarter=quarter)
         return qs
+
+
+# ---------------------------------------------------------------------------
+# SuperAdmin Quarterly Data Management
+# ---------------------------------------------------------------------------
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def superadmin_quarterly_data(request):
+    """Return full Q1–Q4 plan & performance data for a given indicator + year.
+
+    Query params:
+      - indicator  (required) : Indicator ID
+      - year       (required) : Gregorian fiscal year
+    """
+    if not request.user.is_superuser:
+        return Response({'detail': 'Superadmin access required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    indicator_id = request.query_params.get('indicator')
+    year_param = request.query_params.get('year')
+    if not indicator_id or not year_param:
+        return Response({'detail': 'Both indicator and year query params are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        from indicators.models import Indicator
+        indicator = Indicator.objects.select_related('department', 'department__sector').get(id=int(indicator_id))
+    except (Indicator.DoesNotExist, ValueError):
+        return Response({'detail': 'Indicator not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        year = int(year_param)
+    except ValueError:
+        return Response({'detail': 'Invalid year.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    group = indicator.groups.first()
+    annual_plan = AnnualPlan.objects.filter(indicator=indicator, year=year).first()
+
+    breakdown = None
+    if annual_plan:
+        breakdown = QuarterlyBreakdown.objects.filter(plan=annual_plan).first()
+
+    performances = {}
+    if annual_plan:
+        for perf in QuarterlyPerformance.objects.filter(plan=annual_plan):
+            performances[perf.quarter] = perf
+
+    def _perf_data(q):
+        p = performances.get(q)
+        if not p:
+            return None
+        return {
+            'id': p.id,
+            'value': str(p.value) if p.value is not None else None,
+            'status': p.status,
+            'submitted_at': p.submitted_at,
+            'reviewed_at': p.reviewed_at,
+            'validated_at': p.validated_at,
+            'final_approved_at': p.final_approved_at,
+        }
+
+    quarters_data = {}
+    for q in (1, 2, 3, 4):
+        applicable = indicator.is_quarter_applicable(q)
+        plan_value = None
+        if breakdown:
+            plan_value = str(getattr(breakdown, f'q{q}')) if getattr(breakdown, f'q{q}') is not None else None
+        quarters_data[f'q{q}'] = {
+            'applicable': applicable,
+            'plan': {
+                'breakdown_id': breakdown.id if breakdown else None,
+                'value': plan_value,
+                'status': breakdown.status if breakdown else None,
+            } if breakdown else None,
+            'performance': _perf_data(q),
+        }
+
+    return Response({
+        'indicator': {
+            'id': indicator.id,
+            'name': indicator.name,
+            'unit': indicator.unit,
+            'group_name': group.name if group else None,
+            'department': indicator.department.name,
+            'sector': indicator.department.sector.name,
+            'applicable_quarters': indicator.get_applicable_quarters(),
+        },
+        'annual_plan': {
+            'id': annual_plan.id if annual_plan else None,
+            'target': str(annual_plan.target) if annual_plan else None,
+            'year': year,
+        },
+        'breakdown': {
+            'id': breakdown.id if breakdown else None,
+            'status': breakdown.status if breakdown else None,
+        } if breakdown else None,
+        'quarters': quarters_data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def superadmin_update_quarterly(request):
+    """SuperAdmin endpoint to update a plan value/status or performance value/status.
+
+    Body (JSON):
+      {
+        "type":        "plan_value" | "plan_status" | "performance_value" | "performance_status",
+        "breakdown_id": <int>  (required for plan_* types),
+        "performance_id": <int> (required for performance_* types),
+        "quarter":     1|2|3|4  (always required),
+        "value":       <string|number>,
+        "year":        <int>   (for context / logging)
+      }
+    """
+    from .models import AdminEditLog
+
+    if not request.user.is_superuser:
+        return Response({'detail': 'Superadmin access required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    action_type = (request.data.get('type') or '').strip()
+    quarter = request.data.get('quarter')
+    new_value = request.data.get('value')
+    year = request.data.get('year')
+
+    VALID_PLAN_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'VALIDATED', 'FINAL_APPROVED', 'REJECTED']
+    VALID_PERF_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'VALIDATED', 'FINAL_APPROVED', 'REJECTED']
+
+    try:
+        quarter = int(quarter) if quarter is not None else None
+    except (TypeError, ValueError):
+        quarter = None
+
+    if action_type in ('plan_value', 'plan_status'):
+        breakdown_id = request.data.get('breakdown_id')
+        if not breakdown_id:
+            return Response({'detail': 'breakdown_id is required for plan edits.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            breakdown = QuarterlyBreakdown.objects.select_related(
+                'plan__indicator__department__sector'
+            ).get(id=int(breakdown_id))
+        except (QuarterlyBreakdown.DoesNotExist, ValueError):
+            return Response({'detail': 'QuarterlyBreakdown not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        indicator = breakdown.plan.indicator
+        dept = indicator.department
+        sector = dept.sector
+
+        if action_type == 'plan_value':
+            if quarter not in (1, 2, 3, 4):
+                return Response({'detail': 'Valid quarter (1-4) required.'}, status=status.HTTP_400_BAD_REQUEST)
+            field = f'q{quarter}'
+            old_val = str(getattr(breakdown, field)) if getattr(breakdown, field) is not None else 'N/A'
+            if new_value == '' or new_value is None:
+                setattr(breakdown, field, None)
+            else:
+                try:
+                    from decimal import Decimal
+                    setattr(breakdown, field, Decimal(str(new_value)))
+                except Exception:
+                    return Response({'detail': 'Invalid numeric value.'}, status=status.HTTP_400_BAD_REQUEST)
+            breakdown.save(update_fields=[field])
+            new_val = str(getattr(breakdown, field)) if getattr(breakdown, field) is not None else 'N/A'
+            AdminEditLog.objects.create(
+                edited_by=request.user,
+                record_type=AdminEditLog.RecordType.PLAN_VALUE,
+                quarter=quarter,
+                year=breakdown.plan.year,
+                indicator_name=indicator.name,
+                sector_name=getattr(sector, 'name', ''),
+                department_name=getattr(dept, 'name', ''),
+                old_value=old_val,
+                new_value=new_val,
+                breakdown_id=breakdown.id,
+            )
+            return Response({'detail': f'Q{quarter} plan value updated successfully.', 'new_value': new_val})
+
+        else:  # plan_status
+            if new_value not in VALID_PLAN_STATUSES:
+                return Response({'detail': f'Invalid status. Choose from: {", ".join(VALID_PLAN_STATUSES)}'}, status=status.HTTP_400_BAD_REQUEST)
+            old_val = breakdown.status
+            breakdown.status = new_value
+            breakdown.save(update_fields=['status'])
+            AdminEditLog.objects.create(
+                edited_by=request.user,
+                record_type=AdminEditLog.RecordType.PLAN_STATUS,
+                quarter=quarter,
+                year=breakdown.plan.year,
+                indicator_name=indicator.name,
+                sector_name=getattr(sector, 'name', ''),
+                department_name=getattr(dept, 'name', ''),
+                old_value=old_val,
+                new_value=new_value,
+                breakdown_id=breakdown.id,
+            )
+            return Response({'detail': 'Plan status updated successfully.', 'new_status': new_value})
+
+    elif action_type in ('performance_value', 'performance_status'):
+        performance_id = request.data.get('performance_id')
+        if not performance_id:
+            return Response({'detail': 'performance_id is required for performance edits.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            perf = QuarterlyPerformance.objects.select_related(
+                'plan__indicator__department__sector'
+            ).get(id=int(performance_id))
+        except (QuarterlyPerformance.DoesNotExist, ValueError):
+            return Response({'detail': 'QuarterlyPerformance not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        indicator = perf.plan.indicator
+        dept = indicator.department
+        sector = dept.sector
+
+        if action_type == 'performance_value':
+            old_val = str(perf.value) if perf.value is not None else 'N/A'
+            if new_value == '' or new_value is None:
+                perf.value = None
+            else:
+                try:
+                    from decimal import Decimal
+                    perf.value = Decimal(str(new_value))
+                except Exception:
+                    return Response({'detail': 'Invalid numeric value.'}, status=status.HTTP_400_BAD_REQUEST)
+            perf.save(update_fields=['value'])
+            new_val = str(perf.value) if perf.value is not None else 'N/A'
+            AdminEditLog.objects.create(
+                edited_by=request.user,
+                record_type=AdminEditLog.RecordType.PERFORMANCE_VALUE,
+                quarter=perf.quarter,
+                year=perf.plan.year,
+                indicator_name=indicator.name,
+                sector_name=getattr(sector, 'name', ''),
+                department_name=getattr(dept, 'name', ''),
+                old_value=old_val,
+                new_value=new_val,
+                performance_id=perf.id,
+            )
+            return Response({'detail': f'Q{perf.quarter} performance value updated successfully.', 'new_value': new_val})
+
+        else:  # performance_status
+            if new_value not in VALID_PERF_STATUSES:
+                return Response({'detail': f'Invalid status. Choose from: {", ".join(VALID_PERF_STATUSES)}'}, status=status.HTTP_400_BAD_REQUEST)
+            old_val = perf.status
+            perf.status = new_value
+            perf.save(update_fields=['status'])
+            AdminEditLog.objects.create(
+                edited_by=request.user,
+                record_type=AdminEditLog.RecordType.PERFORMANCE_STATUS,
+                quarter=perf.quarter,
+                year=perf.plan.year,
+                indicator_name=indicator.name,
+                sector_name=getattr(sector, 'name', ''),
+                department_name=getattr(dept, 'name', ''),
+                old_value=old_val,
+                new_value=new_value,
+                performance_id=perf.id,
+            )
+            return Response({'detail': 'Performance status updated successfully.', 'new_status': new_value})
+
+    return Response({'detail': 'Invalid action type. Use plan_value, plan_status, performance_value, or performance_status.'}, status=status.HTTP_400_BAD_REQUEST)

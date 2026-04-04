@@ -378,6 +378,30 @@ const MenuIcon = ({ name, active }: { name: string; active?: boolean }) => {
 
 
 
+    case 'Quarterly Manager':
+
+
+
+      return (
+
+
+
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+
+
+
+          <path d="M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm13 0h-3v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/>
+
+
+
+        </svg>
+
+
+
+      );
+
+
+
     case 'Activity Log':
 
 
@@ -693,6 +717,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
       { label: 'Entry Periods', to: '/entry-periods' },
+
+
+
+      { label: 'Quarterly Manager', to: '/superadmin-quarterly' },
 
 
 

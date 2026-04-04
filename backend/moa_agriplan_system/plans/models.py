@@ -268,3 +268,36 @@ def within_quarter_submission_window(date: timezone.datetime, quarter: int) -> b
     else:
         window_end = end + timezone.timedelta(days=10)
         return start <= date <= window_end
+
+
+class AdminEditLog(models.Model):
+    """Tracks every SuperAdmin edit to quarterly plan or performance data."""
+
+    class RecordType(models.TextChoices):
+        PLAN_VALUE = 'PLAN_VALUE', 'Plan Value'
+        PLAN_STATUS = 'PLAN_STATUS', 'Plan Status'
+        PERFORMANCE_VALUE = 'PERFORMANCE_VALUE', 'Performance Value'
+        PERFORMANCE_STATUS = 'PERFORMANCE_STATUS', 'Performance Status'
+
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='admin_edit_logs'
+    )
+    edited_at = models.DateTimeField(auto_now_add=True)
+    record_type = models.CharField(max_length=30, choices=RecordType.choices)
+    quarter = models.PositiveSmallIntegerField(
+        choices=((1, 'Q1'), (2, 'Q2'), (3, 'Q3'), (4, 'Q4')), null=True, blank=True
+    )
+    year = models.PositiveIntegerField(null=True, blank=True)
+    indicator_name = models.CharField(max_length=255, blank=True)
+    sector_name = models.CharField(max_length=255, blank=True)
+    department_name = models.CharField(max_length=255, blank=True)
+    old_value = models.CharField(max_length=255, blank=True)
+    new_value = models.CharField(max_length=255, blank=True)
+    breakdown_id = models.IntegerField(null=True, blank=True)
+    performance_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-edited_at']
+
+    def __str__(self):
+        return f"AdminEdit by {getattr(self.edited_by, 'username', 'unknown')} at {self.edited_at}: {self.record_type}"

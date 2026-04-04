@@ -19,13 +19,11 @@ import {
   RefreshCw,
  
   Activity,
-  Shield,
-  Target,
-  MoreHorizontal
+  Shield
 } from 'lucide-react';
 
 type ActivityItem = {
-  type: 'BREAKDOWN' | 'PERFORMANCE';
+  type: 'BREAKDOWN' | 'PERFORMANCE' | 'ADMIN_EDIT';
   action: string;
   by: string | null;
   at: string;
@@ -37,7 +35,7 @@ type ActivityItem = {
 };
 
 type FilterState = {
-  type: 'ALL' | 'BREAKDOWN' | 'PERFORMANCE';
+  type: 'ALL' | 'BREAKDOWN' | 'PERFORMANCE' | 'ADMIN_EDIT';
   action: string;
   status: string;
   search: string;
@@ -167,6 +165,7 @@ export default function ActivityLogs() {
     
     const breakdowns = items.filter(item => item.type === 'BREAKDOWN');
     const performances = items.filter(item => item.type === 'PERFORMANCE');
+    const adminEdits = items.filter(item => item.type === 'ADMIN_EDIT');
     
     const todayActivities = items.filter(item => {
       const itemDate = new Date(item.at);
@@ -187,6 +186,7 @@ export default function ActivityLogs() {
       today: todayActivities.length,
       breakdowns: breakdowns.length,
       performances: performances.length,
+      adminEdits: adminEdits.length,
       approvals,
       rejections,
       approvalRate: items.length > 0 ? Math.round((approvals / items.length) * 100) : 0
@@ -208,6 +208,9 @@ export default function ActivityLogs() {
   };
 
   const getActionIcon = (type: string, action: string) => {
+    if (type === 'ADMIN_EDIT') {
+      return <Shield className="w-4 h-4 text-amber-500" />;
+    }
     if (action.toLowerCase().includes('approve') || action.toLowerCase().includes('validate')) {
       return <CheckCircle className="w-4 h-4 text-emerald-500" />;
     } else if (action.toLowerCase().includes('reject')) {
@@ -413,6 +416,7 @@ export default function ActivityLogs() {
                         <option value="ALL">All Types</option>
                         <option value="BREAKDOWN">Quarterly Breakdowns</option>
                         <option value="PERFORMANCE">Performance Reports</option>
+                        <option value="ADMIN_EDIT">Admin Edits</option>
                       </select>
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                         <ChevronRight className="w-4 h-4 text-gray-400 rotate-90" />
@@ -644,7 +648,7 @@ export default function ActivityLogs() {
                               {getActionIcon(item.type, item.action)}
                               <div>
                                 <div className="font-medium text-gray-900">
-                                  {item.type === 'BREAKDOWN' ? 'Quarterly Breakdown' : 'Performance Report'}
+                                  {item.type === 'BREAKDOWN' ? 'Quarterly Breakdown' : item.type === 'ADMIN_EDIT' ? 'Admin Override' : 'Performance Report'}
                                 </div>
                                 <div className="text-sm text-gray-500 mt-1">{item.action}</div>
                               </div>
@@ -837,7 +841,7 @@ export default function ActivityLogs() {
 
         {/* Quick Stats Footer */}
         <div className="mt-6 p-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
               <div className="text-sm text-gray-600">Total Activities</div>
@@ -849,6 +853,10 @@ export default function ActivityLogs() {
             <div className="text-center">
               <div className="text-2xl font-bold text-red-600">{stats.rejections}</div>
               <div className="text-sm text-gray-600">Rejections</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-amber-600">{stats.adminEdits}</div>
+              <div className="text-sm text-gray-600">Admin Overrides</div>
             </div>
           </div>
         </div>
