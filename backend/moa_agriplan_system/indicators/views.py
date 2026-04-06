@@ -46,13 +46,17 @@ class SectorViewSet(viewsets.ModelViewSet):
             return qs
         role = getattr(user, 'role', '').upper()
         if role == 'STATE_MINISTER':
-            sector_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            sector_id = getattr(user, 'sector_id', None)
             if sector_id:
                 qs = qs.filter(id=sector_id)
         elif role == 'ADVISOR':
-            # If advisor has department, scope to that department's sector
-            dept = getattr(user, 'department', None)
-            sector_id = getattr(getattr(dept, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            # Prefer the sector of the advisor's department; fall back to direct sector
+            dept_id = getattr(user, 'department_id', None)
+            sector_id = None
+            if dept_id:
+                sector_id = Department.objects.filter(id=dept_id).values_list('sector_id', flat=True).first()
+            if not sector_id:
+                sector_id = getattr(user, 'sector_id', None)
             if sector_id:
                 qs = qs.filter(id=sector_id)
         return qs
@@ -77,17 +81,17 @@ class IndicatorGroupViewSet(viewsets.ModelViewSet):
             return qs
         role = getattr(user, 'role', '').upper()
         if role == 'STATE_MINISTER':
-            s_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            s_id = getattr(user, 'sector_id', None)
             if s_id:
                 qs = qs.filter(
                     Q(department__sector_id=s_id) | Q(sector_id=s_id)
                 )
         elif role == 'ADVISOR':
-            d_id = getattr(getattr(user, 'department', None), 'id', None) or getattr(user, 'department', None)
+            d_id = getattr(user, 'department_id', None)
             if d_id:
                 qs = qs.filter(department_id=d_id)
             else:
-                s_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+                s_id = getattr(user, 'sector_id', None)
                 if s_id:
                     qs = qs.filter(
                         Q(department__sector_id=s_id) | Q(sector_id=s_id)
@@ -115,15 +119,15 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             return qs
         role = getattr(user, 'role', '').upper()
         if role == 'STATE_MINISTER':
-            s_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            s_id = getattr(user, 'sector_id', None)
             if s_id:
                 qs = qs.filter(sector_id=s_id)
         elif role == 'ADVISOR':
-            d_id = getattr(getattr(user, 'department', None), 'id', None) or getattr(user, 'department', None)
+            d_id = getattr(user, 'department_id', None)
             if d_id:
                 qs = qs.filter(id=d_id)
             else:
-                s_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+                s_id = getattr(user, 'sector_id', None)
                 if s_id:
                     qs = qs.filter(sector_id=s_id)
         return qs
@@ -149,15 +153,15 @@ class IndicatorViewSet(viewsets.ModelViewSet):
             return qs
         role = getattr(user, 'role', '').upper()
         if role == 'STATE_MINISTER':
-            s_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            s_id = getattr(user, 'sector_id', None)
             if s_id:
                 qs = qs.filter(department__sector_id=s_id)
         elif role == 'ADVISOR':
-            d_id = getattr(getattr(user, 'department', None), 'id', None) or getattr(user, 'department', None)
+            d_id = getattr(user, 'department_id', None)
             if d_id:
                 qs = qs.filter(department_id=d_id)
             else:
-                s_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+                s_id = getattr(user, 'sector_id', None)
                 if s_id:
                     qs = qs.filter(department__sector_id=s_id)
         return qs
@@ -201,10 +205,14 @@ def state_minister_dashboard(request):
     else:
         role = getattr(user, 'role', '').upper()
         if role == 'STATE_MINISTER':
-            sector_id = getattr(getattr(user, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            sector_id = getattr(user, 'sector_id', None)
         elif role == 'ADVISOR':
-            dept = getattr(user, 'department', None)
-            sector_id = getattr(getattr(dept, 'sector', None), 'id', None) or getattr(user, 'sector', None)
+            dept_id = getattr(user, 'department_id', None)
+            sector_id = None
+            if dept_id:
+                sector_id = Department.objects.filter(id=dept_id).values_list('sector_id', flat=True).first()
+            if not sector_id:
+                sector_id = getattr(user, 'sector_id', None)
     
     if not sector_id:
         return Response({'detail': 'No sector found for user'}, status=status.HTTP_400_BAD_REQUEST)
