@@ -32,7 +32,7 @@ interface Document {
 }
 
 const DOCUMENT_TYPES = [
-  { value: 'NARATIVE', label: 'Narative' },
+  { value: 'NARRATIVE', label: 'Narrative' },
   { value: 'REPORT', label: 'Report' },
   { value: 'POLICY', label: 'Policy' },
   { value: 'GUIDELINE', label: 'Guideline' },
@@ -50,7 +50,7 @@ const TYPE_COLORS: Record<string, string> = {
   DIRECTIVE: 'bg-orange-100 text-orange-700',
   CIRCULAR: 'bg-pink-100 text-pink-700',
   OTHER: 'bg-gray-100 text-gray-600',
-  NARATIVE:'bg-teal-100 text-teal-700'
+  NARRATIVE:'bg-teal-100 text-teal-700'
 };
 
 function FileIcon({ fileName }: { fileName: string }) {

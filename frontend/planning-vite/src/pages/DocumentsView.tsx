@@ -35,7 +35,7 @@ interface Document {
 }
 
 const DOCUMENT_TYPES = [
-  { value: 'NARATIVE', label: 'Narative', icon: '📝', color: 'indigo' },
+  { value: 'NARRATIVE', label: 'Narrative', icon: '📝', color: 'indigo' },
   { value: 'REPORT', label: 'Report', icon: '📊', color: 'blue' },
   { value: 'POLICY', label: 'Policy', icon: '📋', color: 'purple' },
   { value: 'GUIDELINE', label: 'Guideline', icon: '📖', color: 'teal' },
@@ -47,7 +47,7 @@ const DOCUMENT_TYPES = [
 
 const TYPE_COLORS: Record<string, string> = {
   REPORT: 'bg-blue-50 text-blue-700 border-blue-200',
-  NARATIVE: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  NARRATIVE: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   POLICY: 'bg-purple-50 text-purple-700 border-purple-200',
   GUIDELINE: 'bg-teal-50 text-teal-700 border-teal-200',
   PLAN: 'bg-emerald-50 text-emerald-700 border-emerald-200',

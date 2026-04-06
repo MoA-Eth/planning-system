@@ -124,7 +124,7 @@ class FileAttachment(models.Model):
 class Document(models.Model):
     class DocumentType(models.TextChoices):
         REPORT = 'REPORT', 'Report'
-        NARATIVE = 'NARATIVE', 'Narative'
+        NARRATIVE= 'NARRATIVE', 'Narrative'
         POLICY = 'POLICY', 'Policy'
         GUIDELINE = 'GUIDELINE', 'Guideline'
         PLAN = 'PLAN', 'Plan'
