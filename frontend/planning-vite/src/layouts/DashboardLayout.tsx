@@ -760,6 +760,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Department Dashboard', to: '/lead-executive-dashboard' },
+
+
+
       { label: 'Quarterly Breakdown', to: '/quarterly-breakdowns' },
 
 
@@ -816,6 +820,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
+      { label: 'Minister View', to: '/strategic-minister-view' },
+
+
+
       { label: 'Validations', to: '/validations' },
 
 
@@ -833,6 +841,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
     const executiveMenus = [
+
+
+
+      { label: 'Minister View', to: '/executive-minister-view' },
 
 
 

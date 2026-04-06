@@ -11,6 +11,10 @@ import StateMinisterRoute from './routes/StateMinisterRoute'
 
 import StrategicStaffRoute from './routes/StrategicStaffRoute'
 
+import LeadExecutiveBodyRoute from './routes/LeadExecutiveBodyRoute'
+
+import LeadExecutiveDashboard from './pages/LeadExecutiveDashboard'
+
 import ExecutiveRoute from './routes/ExecutiveRoute'
 
 import MinisterRoute from './routes/MinisterRoute'
@@ -68,6 +72,7 @@ import DetailAnalysis from './pages/DetailAnalysis'
 import HierarchicalSpreadsheet from './pages/HierarchicalSpreadsheet'
 
 import SuperAdminQuarterlyManager from './pages/SuperAdminQuarterlyManager'
+
 
 import { useAuth } from './context/AuthContext'
 
@@ -572,6 +577,26 @@ function App() {
             </DashboardLayout>
 
           </SuperuserRoute>
+
+        }
+
+      />
+
+      <Route
+
+        path="/lead-executive-dashboard"
+
+        element={
+
+          <LeadExecutiveBodyRoute>
+
+            <DashboardLayout>
+
+              <LeadExecutiveDashboard />
+
+            </DashboardLayout>
+
+          </LeadExecutiveBodyRoute>
 
         }
 

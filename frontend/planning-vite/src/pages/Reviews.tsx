@@ -120,6 +120,9 @@ export default function Reviews() {
   const [summary, setSummary] = useState<MinisterReviewSummary | null>(null);
 
   const isMinister = (user?.role || '').toUpperCase() === 'STATE_MINISTER';
+  const isStrategic = (user?.role || '').toUpperCase() === 'STRATEGIC_STAFF';
+  const [selectedBreakdownIds, setSelectedBreakdownIds] = useState<Set<number>>(new Set());
+  const [selectedPerfIds, setSelectedPerfIds] = useState<Set<number>>(new Set());
 
   const autoCreateNAPerformances = async () => {
     // Auto-create N/A performances for quarters where the plan is N/A
@@ -432,6 +435,82 @@ export default function Reviews() {
       await loadData(true);
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Rejection failed');
+    }
+  };
+
+  const toggleSelectAllBreakdowns = () => {
+    if (selectedBreakdownIds.size === filteredBreakdowns.length && filteredBreakdowns.length > 0) {
+      setSelectedBreakdownIds(new Set());
+    } else {
+      setSelectedBreakdownIds(new Set(filteredBreakdowns.map((b) => b.id)));
+    }
+  };
+
+  const toggleSelectAllPerformances = () => {
+    if (selectedPerfIds.size === filteredPerfs.length && filteredPerfs.length > 0) {
+      setSelectedPerfIds(new Set());
+    } else {
+      setSelectedPerfIds(new Set(filteredPerfs.map((p) => p.id)));
+    }
+  };
+
+  const batchApproveBreakdowns = async () => {
+    if (selectedBreakdownIds.size === 0) return;
+    if (!confirm(`Approve ${selectedBreakdownIds.size} selected breakdown(s)?`)) return;
+    try {
+      await Promise.all(
+        Array.from(selectedBreakdownIds).map((id) => api.post(`/api/breakdowns/${id}/approve/`))
+      );
+      setSelectedBreakdownIds(new Set());
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Batch approval failed');
+    }
+  };
+
+  const batchRejectBreakdowns = async () => {
+    if (selectedBreakdownIds.size === 0) return;
+    const comment = prompt('Reason for rejection (optional):', '') || '';
+    if (comment === null) return;
+    if (!confirm(`Reject ${selectedBreakdownIds.size} selected breakdown(s)?`)) return;
+    try {
+      await Promise.all(
+        Array.from(selectedBreakdownIds).map((id) => api.post(`/api/breakdowns/${id}/reject/`, { comment }))
+      );
+      setSelectedBreakdownIds(new Set());
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Batch rejection failed');
+    }
+  };
+
+  const batchApprovePerformances = async () => {
+    if (selectedPerfIds.size === 0) return;
+    if (!confirm(`Approve ${selectedPerfIds.size} selected performance report(s)?`)) return;
+    try {
+      await Promise.all(
+        Array.from(selectedPerfIds).map((id) => api.post(`/api/performances/${id}/approve/`))
+      );
+      setSelectedPerfIds(new Set());
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Batch approval failed');
+    }
+  };
+
+  const batchRejectPerformances = async () => {
+    if (selectedPerfIds.size === 0) return;
+    const comment = prompt('Reason for rejection (optional):', '') || '';
+    if (comment === null) return;
+    if (!confirm(`Reject ${selectedPerfIds.size} selected performance report(s)?`)) return;
+    try {
+      await Promise.all(
+        Array.from(selectedPerfIds).map((id) => api.post(`/api/performances/${id}/reject/`, { comment }))
+      );
+      setSelectedPerfIds(new Set());
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Batch rejection failed');
     }
   };
 
@@ -816,7 +895,7 @@ export default function Reviews() {
           {/* Quarterly Breakdowns Card - ON TOP */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-100">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <FileText className="w-5 h-5 text-blue-600" />
@@ -828,6 +907,26 @@ export default function Reviews() {
                     </p>
                   </div>
                 </div>
+                {isMinister && filteredBreakdowns.length > 0 && selectedBreakdownIds.size > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={batchApproveBreakdowns}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve Selected ({selectedBreakdownIds.size})
+                    </button>
+                    <button
+                      onClick={batchRejectBreakdowns}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject Selected ({selectedBreakdownIds.size})
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() => setExpandedView(expandedView === 'breakdowns' ? null : 'breakdowns')}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
@@ -858,6 +957,16 @@ export default function Reviews() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      {isMinister && (
+                        <th className="px-4 py-3 text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={selectedBreakdownIds.size === filteredBreakdowns.length && filteredBreakdowns.length > 0}
+                            onChange={toggleSelectAllBreakdowns}
+                            className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Indicator</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Annual Target</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quarterly Allocation</th>
@@ -876,6 +985,21 @@ export default function Reviews() {
                       
                       return (
                         <tr key={b.id} className="hover:bg-gray-50 transition-colors duration-150">
+                          {isMinister && (
+                            <td className="px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedBreakdownIds.has(b.id)}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedBreakdownIds);
+                                  if (e.target.checked) newSet.add(b.id);
+                                  else newSet.delete(b.id);
+                                  setSelectedBreakdownIds(newSet);
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
@@ -959,7 +1083,7 @@ export default function Reviews() {
           {/* Quarterly Performance Card - AT BOTTOM */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-100">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-emerald-100 rounded-lg">
                     <TrendingUp className="w-5 h-5 text-emerald-600" />
@@ -971,6 +1095,26 @@ export default function Reviews() {
                     </p>
                   </div>
                 </div>
+                {isMinister && filteredPerfs.length > 0 && selectedPerfIds.size > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={batchApprovePerformances}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve Selected ({selectedPerfIds.size})
+                    </button>
+                    <button
+                      onClick={batchRejectPerformances}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject Selected ({selectedPerfIds.size})
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() => setExpandedView(expandedView === 'performance' ? null : 'performance')}
                   className="text-sm text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1"
@@ -1001,6 +1145,16 @@ export default function Reviews() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      {isMinister && (
+                        <th className="px-4 py-3 text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={selectedPerfIds.size === filteredPerfs.length && filteredPerfs.length > 0}
+                            onChange={toggleSelectAllPerformances}
+                            className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Indicator</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quarter</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reported Value</th>
@@ -1017,6 +1171,21 @@ export default function Reviews() {
                       
                       return (
                         <tr key={pr.id} className="hover:bg-gray-50 transition-colors duration-150">
+                          {isMinister && (
+                            <td className="px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedPerfIds.has(pr.id)}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedPerfIds);
+                                  if (e.target.checked) newSet.add(pr.id);
+                                  else newSet.delete(pr.id);
+                                  setSelectedPerfIds(newSet);
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">

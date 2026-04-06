@@ -74,6 +74,11 @@ export default function Validations() {
   const [deptFilter, setDeptFilter] = useState<number | 'ALL'>('ALL');
   const [showFilters, setShowFilters] = useState(false);
   const [expandedView, setExpandedView] = useState<'breakdowns' | 'performance' | 'plans' | null>(null);
+  
+  // Batch validation state variables
+  const [selectedBreakdownIds, setSelectedBreakdownIds] = useState<Set<number>>(new Set());
+  const [selectedPerfIds, setSelectedPerfIds] = useState<Set<number>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
 
   const isStrategic = (user?.role || '').toUpperCase() === 'STRATEGIC_STAFF';
 
@@ -97,6 +102,10 @@ export default function Validations() {
       setPlans(plansRes.data || []);
       setBreakdowns(bRes.data || []);
       setPerfs(pRes.data || []);
+      
+      // Reset selections when data loads
+      setSelectedBreakdownIds(new Set());
+      setSelectedPerfIds(new Set());
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Failed to load data');
     } finally {
@@ -205,6 +214,181 @@ export default function Validations() {
       perfApprovalRate: totalPerfs > 0 ? Math.round((approvedPerfCount / totalPerfs) * 100) : 0
     };
   }, [breakdowns, perfs]);
+
+  // Batch validation functions
+  const batchValidateBreakdowns = async () => {
+    const ids = Array.from(selectedBreakdownIds);
+    if (ids.length === 0) {
+      alert('Please select at least one breakdown to validate');
+      return;
+    }
+    
+    if (!confirm(`Validate ${ids.length} quarterly breakdown(s) as compliant? This will validate all selected items at once.`)) return;
+    
+    setSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const id of ids) {
+      try {
+        await api.post(`/api/breakdowns/${id}/validate/`);
+        successCount++;
+      } catch (e: any) {
+        console.error(`Failed to validate breakdown ${id}:`, e);
+        failCount++;
+      }
+    }
+    
+    await loadData(true);
+    setSelectedBreakdownIds(new Set());
+    setSubmitting(false);
+    alert(`Validated ${successCount} breakdowns. Failed: ${failCount}`);
+  };
+
+  const batchValidatePerformances = async () => {
+    const ids = Array.from(selectedPerfIds);
+    if (ids.length === 0) {
+      alert('Please select at least one performance report to validate');
+      return;
+    }
+    
+    if (!confirm(`Validate ${ids.length} performance report(s) as compliant? This will validate all selected items at once.`)) return;
+    
+    setSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const id of ids) {
+      try {
+        await api.post(`/api/performances/${id}/validate/`);
+        successCount++;
+      } catch (e: any) {
+        console.error(`Failed to validate performance ${id}:`, e);
+        failCount++;
+      }
+    }
+    
+    await loadData(true);
+    setSelectedPerfIds(new Set());
+    setSubmitting(false);
+    alert(`Validated ${successCount} performance reports. Failed: ${failCount}`);
+  };
+
+  const batchRejectBreakdowns = async () => {
+    const ids = Array.from(selectedBreakdownIds);
+    if (ids.length === 0) {
+      alert('Please select at least one breakdown to reject');
+      return;
+    }
+    
+    const comment = prompt(`Please provide a reason for rejecting ${ids.length} breakdown(s) (required):`, '') || '';
+    if (comment === null) return;
+    
+    if (!comment.trim()) {
+      alert('Please provide a rejection reason.');
+      return;
+    }
+    
+    if (!confirm(`Reject ${ids.length} quarterly breakdown(s)?\nReason: ${comment}`)) return;
+    
+    setSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const id of ids) {
+      try {
+        await api.post(`/api/breakdowns/${id}/reject/`, { comment });
+        successCount++;
+      } catch (e: any) {
+        console.error(`Failed to reject breakdown ${id}:`, e);
+        failCount++;
+      }
+    }
+    
+    await loadData(true);
+    setSelectedBreakdownIds(new Set());
+    setSubmitting(false);
+    alert(`Rejected ${successCount} breakdowns. Failed: ${failCount}`);
+  };
+
+  const batchRejectPerformances = async () => {
+    const ids = Array.from(selectedPerfIds);
+    if (ids.length === 0) {
+      alert('Please select at least one performance report to reject');
+      return;
+    }
+    
+    const comment = prompt(`Please provide a reason for rejecting ${ids.length} performance report(s) (required):`, '') || '';
+    if (comment === null) return;
+    
+    if (!comment.trim()) {
+      alert('Please provide a rejection reason.');
+      return;
+    }
+    
+    if (!confirm(`Reject ${ids.length} performance report(s)?\nReason: ${comment}`)) return;
+    
+    setSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const id of ids) {
+      try {
+        await api.post(`/api/performances/${id}/reject/`, { comment });
+        successCount++;
+      } catch (e: any) {
+        console.error(`Failed to reject performance ${id}:`, e);
+        failCount++;
+      }
+    }
+    
+    await loadData(true);
+    setSelectedPerfIds(new Set());
+    setSubmitting(false);
+    alert(`Rejected ${successCount} performance reports. Failed: ${failCount}`);
+  };
+
+  const validateAllPendingBreakdowns = async () => {
+    const allPendingIds = approvedBreakdowns.map(b => b.id);
+    if (allPendingIds.length === 0) {
+      alert('No approved breakdowns to validate');
+      return;
+    }
+    
+    if (!confirm(`Validate ALL ${allPendingIds.length} approved breakdowns? This cannot be undone.`)) return;
+    
+    setSelectedBreakdownIds(new Set(allPendingIds));
+    setTimeout(() => batchValidateBreakdowns(), 100);
+  };
+
+  const validateAllPendingPerformances = async () => {
+    const allPendingIds = approvedPerfs.map(p => p.id);
+    if (allPendingIds.length === 0) {
+      alert('No approved performance reports to validate');
+      return;
+    }
+    
+    if (!confirm(`Validate ALL ${allPendingIds.length} approved performance reports? This cannot be undone.`)) return;
+    
+    setSelectedPerfIds(new Set(allPendingIds));
+    setTimeout(() => batchValidatePerformances(), 100);
+  };
+
+  const toggleSelectAllBreakdowns = () => {
+    if (selectedBreakdownIds.size === approvedBreakdowns.length && approvedBreakdowns.length > 0) {
+      setSelectedBreakdownIds(new Set());
+    } else {
+      setSelectedBreakdownIds(new Set(approvedBreakdowns.map(b => b.id)));
+    }
+  };
+
+  const toggleSelectAllPerformances = () => {
+    if (selectedPerfIds.size === approvedPerfs.length && approvedPerfs.length > 0) {
+      setSelectedPerfIds(new Set());
+    } else {
+      setSelectedPerfIds(new Set(approvedPerfs.map(p => p.id)));
+    }
+  };
 
   const validateBreakdown = async (b: Breakdown) => {
     if (!confirm(`Validate this quarterly breakdown as compliant?`)) return;
@@ -581,10 +765,10 @@ export default function Validations() {
 
         {/* Main Content */}
         <div className="grid grid-cols-1">
-          {/* Quarterly Breakdowns Card */}
+          {/* Quarterly Breakdowns Card - WITH BATCH VALIDATION */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-100">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <FileCheck className="w-5 h-5 text-blue-600" />
@@ -596,6 +780,41 @@ export default function Validations() {
                     </p>
                   </div>
                 </div>
+                
+                {/* Batch Action Buttons for Breakdowns */}
+                {isStrategic && approvedBreakdowns.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedBreakdownIds.size > 0 && (
+                      <>
+                        <button
+                          onClick={batchValidateBreakdowns}
+                          disabled={submitting}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          <CheckSquare className="w-4 h-4" />
+                          Validate Selected ({selectedBreakdownIds.size})
+                        </button>
+                        <button
+                          onClick={batchRejectBreakdowns}
+                          disabled={submitting}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Reject Selected ({selectedBreakdownIds.size})
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={validateAllPendingBreakdowns}
+                      disabled={submitting || approvedBreakdowns.length === 0}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Validate All ({approvedBreakdowns.length})
+                    </button>
+                  </div>
+                )}
+                
                 <button
                   onClick={() => setExpandedView(expandedView === 'breakdowns' ? null : 'breakdowns')}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
@@ -626,6 +845,17 @@ export default function Validations() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      {/* Checkbox column header */}
+                      {isStrategic && (
+                        <th className="px-4 py-3 text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={selectedBreakdownIds.size === approvedBreakdowns.length && approvedBreakdowns.length > 0}
+                            onChange={toggleSelectAllBreakdowns}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Indicator</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Annual Target</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quarterly Allocation</th>
@@ -644,6 +874,25 @@ export default function Validations() {
                       
                       return (
                         <tr key={b.id} className="hover:bg-gray-50 transition-colors duration-150">
+                          {/* Checkbox column */}
+                          {isStrategic && (
+                            <td className="px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedBreakdownIds.has(b.id)}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedBreakdownIds);
+                                  if (e.target.checked) {
+                                    newSet.add(b.id);
+                                  } else {
+                                    newSet.delete(b.id);
+                                  }
+                                  setSelectedBreakdownIds(newSet);
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">
@@ -719,10 +968,10 @@ export default function Validations() {
             )}
           </div>
 
-          {/* Quarterly Performance Card */}
+          {/* Quarterly Performance Card - WITH BATCH VALIDATION */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-100">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-emerald-100 rounded-lg">
                     <TrendingUp className="w-5 h-5 text-emerald-600" />
@@ -734,6 +983,41 @@ export default function Validations() {
                     </p>
                   </div>
                 </div>
+                
+                {/* Batch Action Buttons for Performances */}
+                {isStrategic && approvedPerfs.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedPerfIds.size > 0 && (
+                      <>
+                        <button
+                          onClick={batchValidatePerformances}
+                          disabled={submitting}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          <CheckSquare className="w-4 h-4" />
+                          Validate Selected ({selectedPerfIds.size})
+                        </button>
+                        <button
+                          onClick={batchRejectPerformances}
+                          disabled={submitting}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Reject Selected ({selectedPerfIds.size})
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={validateAllPendingPerformances}
+                      disabled={submitting || approvedPerfs.length === 0}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Validate All ({approvedPerfs.length})
+                    </button>
+                  </div>
+                )}
+                
                 <button
                   onClick={() => setExpandedView(expandedView === 'performance' ? null : 'performance')}
                   className="text-sm text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1"
@@ -764,6 +1048,17 @@ export default function Validations() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      {/* Checkbox column header */}
+                      {isStrategic && (
+                        <th className="px-4 py-3 text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={selectedPerfIds.size === approvedPerfs.length && approvedPerfs.length > 0}
+                            onChange={toggleSelectAllPerformances}
+                            className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Indicator</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quarter</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reported Value</th>
@@ -780,6 +1075,25 @@ export default function Validations() {
                       
                       return (
                         <tr key={pr.id} className="hover:bg-gray-50 transition-colors duration-150">
+                          {/* Checkbox column */}
+                          {isStrategic && (
+                            <td className="px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedPerfIds.has(pr.id)}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedPerfIds);
+                                  if (e.target.checked) {
+                                    newSet.add(pr.id);
+                                  } else {
+                                    newSet.delete(pr.id);
+                                  }
+                                  setSelectedPerfIds(newSet);
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                            </td>
+                          )}
                           <td className="px-6 py-4">
                             <div className="flex items-start gap-3">
                               <div className="flex-1">

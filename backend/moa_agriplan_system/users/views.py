@@ -298,7 +298,7 @@ class IsIndicatorDashboardViewer(permissions.BasePermission):
         if not (user and user.is_authenticated):
             return False
         role = getattr(user, 'role', '').upper()
-        return role in ['STATE_MINISTER', 'ADVISOR', 'STRATEGIC_STAFF', 'EXECUTIVE', 'MINISTER_VIEW']
+        return role in ['STATE_MINISTER', 'ADVISOR', 'STRATEGIC_STAFF', 'EXECUTIVE', 'MINISTER_VIEW', 'LEAD_EXECUTIVE_BODY']
 
 
 class MinisterDashboardView(APIView):
@@ -1075,4 +1075,192 @@ class IndicatorDetailView(APIView):
             'yearly_data': yearly_data,
             'current_year_quarters': current_year_quarters,
             'last_year_quarters': last_year_quarters,
+        })
+
+
+class DepartmentDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Returns department-scoped performance dashboard for LEAD_EXECUTIVE_BODY users."""
+        from rest_framework import status as drf_status
+        user = request.user
+        role = getattr(user, 'role', '').upper()
+        is_super = getattr(user, 'is_superuser', False)
+
+        if not is_super and role != 'LEAD_EXECUTIVE_BODY':
+            return Response({'detail': 'Permission denied.'}, status=403)
+
+        dept_obj = getattr(user, 'department', None)
+        if not dept_obj:
+            return Response({'detail': 'No department assigned to your account.'}, status=400)
+
+        dept_id = dept_obj.id
+
+        year = request.query_params.get('year')
+        quarter_months = request.query_params.get('quarter_months')
+        if year:
+            try:
+                year = int(year)
+            except ValueError:
+                year = None
+        if quarter_months:
+            try:
+                quarter_months = int(quarter_months)
+            except ValueError:
+                quarter_months = None
+
+        if not year:
+            latest_plan = AnnualPlan.objects.filter(indicator__department_id=dept_id).order_by('-year').first()
+            if latest_plan:
+                year = latest_plan.year
+            else:
+                return Response({
+                    'year': None, 'quarter_months': None,
+                    'department': {'id': dept_id, 'name': dept_obj.name, 'performance_percentage': None},
+                    'groups': [], 'ungrouped_indicators': []
+                })
+
+        plans_qs = list(AnnualPlan.objects.select_related(
+            'indicator__department__sector'
+        ).prefetch_related(
+            'indicator__groups'
+        ).filter(year=year, indicator__department_id=dept_id))
+
+        perfs_qs = list(QuarterlyPerformance.objects.select_related('plan').filter(
+            plan__year=year,
+            plan__indicator__department_id=dept_id,
+            status__in=[PerformanceStatus.APPROVED, PerformanceStatus.VALIDATED, PerformanceStatus.FINAL_APPROVED]
+        ))
+
+        breakdowns_qs = list(QuarterlyBreakdown.objects.select_related('plan').filter(
+            plan__year=year,
+            plan__indicator__department_id=dept_id,
+            status__in=[PlanStatus.APPROVED, PlanStatus.VALIDATED, PlanStatus.FINAL_APPROVED]
+        ))
+
+        perfs_by_plan = {}
+        for p in perfs_qs:
+            perfs_by_plan.setdefault(p.plan_id, []).append(p)
+
+        bds_by_plan = {bd.plan_id: bd for bd in breakdowns_qs}
+
+        indicators_data = []
+        for plan in plans_qs:
+            indicator = plan.indicator
+            indicator_perfs = perfs_by_plan.get(plan.id, [])
+
+            if quarter_months:
+                qm_map = {1: 3, 2: 6, 3: 9, 4: 12}
+                filtered_perfs = [p for p in indicator_perfs if qm_map.get(p.quarter, 12) <= quarter_months]
+            else:
+                if getattr(indicator, 'is_incremental', False):
+                    filtered_perfs = [p for p in indicator_perfs if p.quarter == 4]
+                else:
+                    filtered_perfs = indicator_perfs
+
+            is_na_target = plan.target is None or plan.target == '' or str(plan.target).upper() == 'N/A'
+            target = 0
+            if not is_na_target:
+                try:
+                    target = float(plan.target)
+                    if quarter_months:
+                        bd = bds_by_plan.get(plan.id)
+                        if bd:
+                            qt = 0
+                            if quarter_months >= 3: qt += float(bd.q1 or 0)
+                            if quarter_months >= 6: qt += float(bd.q2 or 0)
+                            if quarter_months >= 9: qt += float(bd.q3 or 0)
+                            if quarter_months >= 12: qt += float(bd.q4 or 0)
+                            target = qt
+                        else:
+                            target = (target * quarter_months) / 12
+                except (ValueError, TypeError):
+                    is_na_target = True
+                    target = 0
+
+            all_perf_na = all(
+                p.value is None or p.value == '' or str(p.value).upper() == 'N/A'
+                for p in filtered_perfs
+            ) if filtered_perfs else True
+            total_achieved = sum(
+                float(p.value) for p in filtered_perfs
+                if p.value is not None and p.value != '' and str(p.value).upper() != 'N/A'
+            )
+
+            if is_na_target or all_perf_na or target <= 0:
+                perf_pct = None
+            else:
+                perf_pct = min((total_achieved / target) * 100, 100.0)
+
+            groups = indicator.groups.all()
+            group_id = groups.first().id if groups.exists() else None
+            group_name = groups.first().name if groups.exists() else None
+
+            indicators_data.append({
+                'id': indicator.id,
+                'plan_id': plan.id,
+                'name': indicator.name,
+                'unit': indicator.unit,
+                'description': indicator.description,
+                'is_aggregatable': indicator.is_aggregatable,
+                'target': 0 if is_na_target else target,
+                'achieved': 0 if all_perf_na else total_achieved,
+                'performance_percentage': perf_pct,
+                'group_id': group_id,
+                'group_name': group_name,
+                'kpi_characteristics': getattr(indicator, 'kpi_characteristics', ''),
+            })
+
+        groups_dict = {}
+        ungrouped = []
+        for ind in indicators_data:
+            if ind['group_id']:
+                gid = ind['group_id']
+                if gid not in groups_dict:
+                    groups_dict[gid] = {'id': gid, 'name': ind['group_name'], 'indicators': []}
+                groups_dict[gid]['indicators'].append(ind)
+            else:
+                ungrouped.append(ind)
+
+        groups_result = []
+        for g_id, g_data in groups_dict.items():
+            g_agg_pcts = [
+                ind['performance_percentage']
+                for ind in g_data['indicators']
+                if ind.get('is_aggregatable', True) and ind['performance_percentage'] is not None
+            ]
+            g_perf = sum(g_agg_pcts) / len(g_agg_pcts) if g_agg_pcts else None
+            try:
+                group_obj = IndicatorGroup.objects.get(id=g_id)
+                is_label = group_obj.is_label
+            except IndicatorGroup.DoesNotExist:
+                is_label = False
+            if is_label:
+                g_perf = None
+            groups_result.append({
+                'id': g_data['id'],
+                'name': g_data['name'],
+                'performance_percentage': g_perf,
+                'indicators': g_data['indicators'],
+                'is_label': is_label,
+            })
+
+        agg_pcts = [
+            ind['performance_percentage']
+            for ind in indicators_data
+            if ind.get('is_aggregatable', True) and ind['performance_percentage'] is not None
+        ]
+        dept_perf = sum(agg_pcts) / len(agg_pcts) if agg_pcts else None
+
+        return Response({
+            'year': year,
+            'quarter_months': quarter_months,
+            'department': {
+                'id': dept_id,
+                'name': dept_obj.name,
+                'performance_percentage': dept_perf,
+            },
+            'groups': groups_result,
+            'ungrouped_indicators': ungrouped,
         })
