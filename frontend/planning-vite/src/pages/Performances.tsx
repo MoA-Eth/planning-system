@@ -376,10 +376,10 @@ export default function Performances() {
       // Convert input value to API format, properly handling N/A vs 0
       const apiValue = convertInputToAPIValue(value);
       const perf = await ensurePerf(planId, quarter, apiValue || '0');
-      await api.put(`/api/performances/${perf.id}/`, { plan: planId, quarter, value: apiValue, status: perf.status });
+      await api.put(`/api/performances/${perf.id}/`, { plan: planId, quarter, value: apiValue, status: perf.status, variance_description: perfModal.varianceDescription || '' });
       
       const key = `${planId}-${quarter}`;
-      setPerfs((prev) => ({ ...prev, [key]: { ...(prev[key] || perf), value: apiValue } as Performance }));
+      setPerfs((prev) => ({ ...prev, [key]: { ...(prev[key] || perf), value: apiValue, variance_description: perfModal.varianceDescription || '' } as Performance }));
       
       setSuccess(`Q${quarter} performance saved`);
       setTimeout(() => setSuccess(null), 3000);
@@ -402,10 +402,10 @@ export default function Performances() {
       if (typeof value === 'string') {
         const apiValue = convertInputToAPIValue(value);
         perf = await ensurePerf(planId, quarter, apiValue || '0');
-        await api.put(`/api/performances/${perf.id}/`, { plan: planId, quarter, value: apiValue, status: perf.status });
+        await api.put(`/api/performances/${perf.id}/`, { plan: planId, quarter, value: apiValue, status: perf.status, variance_description: perfModal.varianceDescription || '' });
         
         const key = `${planId}-${quarter}`;
-        setPerfs((prev) => ({ ...prev, [key]: { ...(prev[key] || perf), value: apiValue } as Performance }));
+        setPerfs((prev) => ({ ...prev, [key]: { ...(prev[key] || perf), value: apiValue, variance_description: perfModal.varianceDescription || '' } as Performance }));
       } else {
         perf = await ensurePerf(planId, quarter);
       }
@@ -1036,7 +1036,7 @@ export default function Performances() {
         indicatorName: p.indicator_name,
         planValue: planQ(q),
         annualTarget: p.target,
-        varianceDescription: '',
+        varianceDescription: perfs[`${p.id}-${q}`]?.variance_description || '',
       });
     };
 
