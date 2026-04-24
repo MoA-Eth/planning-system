@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { useNavigate } from 'react-router-dom';
+
 import { useAuth } from '../context/AuthContext';
 
 import homePic from '../assets/home_pic.jpg';
@@ -53,6 +55,8 @@ interface FeatureCard {
 export default function Home() {
 
   const { user, logout } = useAuth();
+
+  const navigate = useNavigate();
 
   const [activeFeature, setActiveFeature] = useState(0);
 
@@ -942,7 +946,7 @@ export default function Home() {
 
             <div className="flex space-x-6 mt-4 md:mt-0">
 
-              <button className="text-sm hover:text-white transition-colors">Privacy Policy</button>
+              <button onClick={() => navigate('/privacy-policy')} className="text-sm hover:text-white transition-colors">Privacy Policy</button>
 
               <button className="text-sm hover:text-white transition-colors">Terms of Use</button>
 

@@ -73,6 +73,8 @@ import HierarchicalSpreadsheet from './pages/HierarchicalSpreadsheet'
 
 import SuperAdminQuarterlyManager from './pages/SuperAdminQuarterlyManager'
 
+import PrivacyPolicy from './pages/PrivacyPolicy'
+
 
 import { useAuth } from './context/AuthContext'
 
@@ -121,6 +123,8 @@ function App() {
     <Routes>
 
       <Route path="/login" element={<Login />} />
+
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
       <Route
 
