@@ -297,6 +297,8 @@ class IsIndicatorDashboardViewer(permissions.BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
+        if getattr(user, 'is_superuser', False):
+            return True  # ✅ 
         role = getattr(user, 'role', '').upper()
         return role in ['STATE_MINISTER', 'ADVISOR', 'STRATEGIC_STAFF', 'EXECUTIVE', 'MINISTER_VIEW', 'LEAD_EXECUTIVE_BODY']
 
