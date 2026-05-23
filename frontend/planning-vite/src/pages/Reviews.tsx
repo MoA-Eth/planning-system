@@ -1165,9 +1165,10 @@ export default function Reviews() {
                   <tbody className="divide-y divide-gray-200">
                     {filteredPerfs.map((pr) => {
                       const p = planById[pr.plan];
-                      const targetValue = parseFloat(p?.target || '0');
+                      const breakdown = breakdowns.find(b => b.plan === pr.plan);
+                      const quarterTarget = breakdown ? parseFloat(String(breakdown[`q${pr.quarter}` as keyof Breakdown] || '0')) : 0;
                       const reportedValue = parseFloat(pr.value || '0');
-                      const achievementRate = targetValue > 0 ? (reportedValue / targetValue) * 100 : 0;
+                      const achievementRate = quarterTarget > 0 ? (reportedValue / quarterTarget) * 100 : 0;
                       
                       return (
                         <tr key={pr.id} className="hover:bg-gray-50 transition-colors duration-150">
@@ -1209,7 +1210,7 @@ export default function Reviews() {
                               Quarter {pr.quarter}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              Annual target: {p?.target}
+                              Quarter target: {quarterTarget || '—'}
                             </div>
                           </td>
                           <td className="px-6 py-4">
