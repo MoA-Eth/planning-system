@@ -113,7 +113,6 @@ pipeline {
                         docker.build("${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG}")
                         docker.build("${DOCKER_IMAGE_BACKEND}:latest")
                     }
-
                     dir('frontend/planning-vite') {
                         docker.build("${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG}")
                         docker.build("${DOCKER_IMAGE_FRONTEND}:latest")
@@ -127,36 +126,53 @@ pipeline {
             steps {
                 input message: "Deploy to ${REMOTE_SERVER}?", ok: "Deploy"
 
-                sshagent(['moapms3-ssh-key']) {
-                    sh """
-ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} '
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-pat',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+                    sshagent(['moapms3-ssh-key']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} bash -s << EOF
 set -e
+
 mkdir -p ${REMOTE_PATH}
 cd ${REMOTE_PATH}
 
+# Configure git buffer to prevent timeout on slow network
+git config --global http.postBuffer 524288000
+git config --global http.lowSpeedLimit 0
+git config --global http.lowSpeedTime 999999
+
+# Clone or pull with credentials embedded in URL
 if [ ! -d .git ]; then
-    git clone https://github.com/lidu5/planning-system.git .
+    git clone --depth=1 https://${GIT_USER}:${GIT_TOKEN}@github.com/lidu5/planning-system.git .
 else
-    git pull origin main
+    git fetch https://${GIT_USER}:${GIT_TOKEN}@github.com/lidu5/planning-system.git main
+    git reset --hard FETCH_HEAD
 fi
 
+# Check .env exists
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "❌ Configure .env before deployment"
     exit 1
 fi
 
+# Deploy
 docker-compose -f docker-compose.prod.yml down
 docker-compose -f docker-compose.prod.yml up -d --build
 
 sleep 20
+
 docker exec moa-backend-prod python manage.py migrate --noinput
 docker exec moa-backend-prod python manage.py collectstatic --noinput
 
 echo "✅ Deployment completed"
 echo "🌐 http://${REMOTE_SERVER}:8080"
-'
-"""
+EOF
+                        """
+                    }
                 }
             }
         }
@@ -164,11 +180,11 @@ echo "🌐 http://${REMOTE_SERVER}:8080"
         /* ================= HEALTH CHECK ================= */
         stage('Health Check') {
             steps {
-                sh '''
+                sh """
                     sleep 20
                     curl -f http://${REMOTE_SERVER}:8080/health || true
                     curl -f http://${REMOTE_SERVER}:8080/api/ || true
-                '''
+                """
             }
         }
     }
@@ -181,11 +197,9 @@ echo "🌐 http://${REMOTE_SERVER}:8080"
                 docker volume prune -f || true
             '''
         }
-
         success {
             echo '✅ PIPELINE SUCCESS'
         }
-
         failure {
             echo '❌ PIPELINE FAILED'
         }
