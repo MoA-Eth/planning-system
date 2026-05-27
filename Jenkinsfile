@@ -131,7 +131,7 @@ pipeline {
                     usernameVariable: 'GIT_USER',
                     passwordVariable: 'GIT_TOKEN'
                 )]) {
-                    sshagent(['moapms3-ssh-key']) {
+                    sshagent(['moapms']) {
                         sh """
                             ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} bash -s << EOF
 set -e
