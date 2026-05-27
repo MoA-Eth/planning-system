@@ -26,7 +26,20 @@ pipeline {
         /* ================= CHECKOUT ================= */
         stage('Checkout') {
             steps {
-                checkout scm
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    extensions: [[
+                        $class: 'CloneOption',
+                        shallow: true,
+                        depth: 1,
+                        timeout: 120
+                    ]],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/lidu5/planning-system.git',
+                        credentialsId: 'moapms-ssh-key'
+                    ]]
+                ])
             }
         }
 
@@ -127,11 +140,11 @@ pipeline {
                 input message: "Deploy to ${REMOTE_SERVER}?", ok: "Deploy"
 
                 withCredentials([usernamePassword(
-                    credentialsId: 'github-pat',
+                    credentialsId: 'moapms-ssh-key',
                     usernameVariable: 'GIT_USER',
                     passwordVariable: 'GIT_TOKEN'
                 )]) {
-                    sshagent(['moapms']) {
+                    sshagent(['moapms3-ssh-key']) {
                         sh """
                             ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} bash -s << EOF
 set -e
@@ -139,27 +152,23 @@ set -e
 mkdir -p ${REMOTE_PATH}
 cd ${REMOTE_PATH}
 
-# Configure git buffer to prevent timeout on slow network
 git config --global http.postBuffer 524288000
 git config --global http.lowSpeedLimit 0
 git config --global http.lowSpeedTime 999999
 
-# Clone or pull with credentials embedded in URL
 if [ ! -d .git ]; then
-    git clone --depth=1 https://${GIT_USER}:${GIT_TOKEN}@github.com/lidu5/planning-system.git .
+    git clone --depth=1 https://\${GIT_USER}:\${GIT_TOKEN}@github.com/lidu5/planning-system.git .
 else
-    git fetch https://${GIT_USER}:${GIT_TOKEN}@github.com/lidu5/planning-system.git main
+    git fetch https://\${GIT_USER}:\${GIT_TOKEN}@github.com/lidu5/planning-system.git main
     git reset --hard FETCH_HEAD
 fi
 
-# Check .env exists
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "❌ Configure .env before deployment"
     exit 1
 fi
 
-# Deploy
 docker-compose -f docker-compose.prod.yml down
 docker-compose -f docker-compose.prod.yml up -d --build
 
