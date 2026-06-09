@@ -45,7 +45,8 @@ class IndicatorGroupSerializer(serializers.ModelSerializer):
         model = IndicatorGroup
         fields = [
             'id', 'name', 'department', 'department_id', 'sector', 'sector_id',
-            'parent', 'parent_id', 'unit', 'is_label', 'children', 'level', 'hierarchy_path', 
+            'parent', 'parent_id', 'unit', 'is_label', 'display_order', 'status',
+            'children', 'level', 'hierarchy_path', 
             'is_parent', 'inherited_unit', 'annual_target_aggregate', 
             'quarterly_breakdown_aggregate', 'performance_aggregate'
         ]
@@ -150,7 +151,7 @@ class IndicatorSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'unit', 'description', 'department', 'department_id', 
             'groups', 'group_ids', 'is_aggregatable', 'is_incremental', 'effective_unit', 'hierarchy_context',
-            'applicable_quarters', 'baseline'
+            'applicable_quarters', 'baseline', 'display_order'
         ]
 
     def get_hierarchy_context(self, obj):

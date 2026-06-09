@@ -17,6 +17,7 @@ type AnnualPlan = {
   sector_id?: number;
   sector_name?: string;
   target: string;
+  indicator_is_incremental?: boolean;
 };
 
 type Breakdown = {
@@ -232,7 +233,7 @@ export default function Performances() {
         p.indicator_unit || '',
         String(etYear || ''),
         String(p.target || ''),
-        annualPerformance(p.id).toFixed(2),
+        annualPerformance(p).toFixed(2),
         String(bd?.q1 || ''), perf(1), perfS(1),
         String(bd?.q2 || ''), perf(2), perfS(2),
         String(bd?.q3 || ''), perf(3), perfS(3),
@@ -266,12 +267,26 @@ export default function Performances() {
     setTimeout(() => setSuccess(null), 3000);
   };
 
-  const annualPerformance = (planId: number): number => {
+  const annualPerformance = (plan: AnnualPlan): number => {
+    if (plan.indicator_is_incremental) {
+      for (let q: 1|2|3|4 = 4; q >= 1; q = (q - 1) as 1|2|3|4) {
+        const key = `${plan.id}-${q}`;
+        const raw = perfs[key]?.value;
+        if (raw !== undefined && raw !== null && raw !== '' && raw.toUpperCase() !== 'N/A') {
+          const v = parseFloat(raw);
+          if (!isNaN(v)) return v;
+        }
+      }
+      return 0;
+    }
     let sum = 0;
     for (let q: 1|2|3|4 = 1; q <= 4; q = (q + 1) as 1|2|3|4) {
-      const key = `${planId}-${q}`;
-      const v = parseFloat(perfs[key]?.value || '0');
-      if (!isNaN(v)) sum += v;
+      const key = `${plan.id}-${q}`;
+      const raw = perfs[key]?.value;
+      if (raw !== undefined && raw !== null && raw !== '' && raw.toUpperCase() !== 'N/A') {
+        const v = parseFloat(raw);
+        if (!isNaN(v)) sum += v;
+      }
     }
     return sum;
   };
@@ -279,14 +294,26 @@ export default function Performances() {
   const findPrevBaseline = (indicatorId: number) => {
     const prev = plansPrev.find((p) => p.indicator === indicatorId);
     if (!prev) return { target: 0, perf: 0 };
-    let perf = 0;
     const approvedSet = new Set(['APPROVED','VALIDATED','FINAL_APPROVED']);
-    for (let q: 1|2|3|4 = 1; q <= 4; q = (q + 1) as 1|2|3|4) {
-      const key = `${prev.id}-${q}`;
-      const item = perfs[key];
-      const ok = approvedSet.has(String(item?.status || 'DRAFT').toUpperCase());
-      const v = ok ? parseFloat(item?.value || '0') : 0;
-      if (!isNaN(v)) perf += v;
+    let perf = 0;
+    if (prev.indicator_is_incremental) {
+      for (let q: 1|2|3|4 = 4; q >= 1; q = (q - 1) as 1|2|3|4) {
+        const key = `${prev.id}-${q}`;
+        const item = perfs[key];
+        const ok = approvedSet.has(String(item?.status || 'DRAFT').toUpperCase());
+        if (ok && item?.value !== undefined && item.value !== '' && item.value?.toUpperCase() !== 'N/A') {
+          const v = parseFloat(item.value);
+          if (!isNaN(v)) { perf = v; break; }
+        }
+      }
+    } else {
+      for (let q: 1|2|3|4 = 1; q <= 4; q = (q + 1) as 1|2|3|4) {
+        const key = `${prev.id}-${q}`;
+        const item = perfs[key];
+        const ok = approvedSet.has(String(item?.status || 'DRAFT').toUpperCase());
+        const v = ok ? parseFloat(item?.value || '0') : 0;
+        if (!isNaN(v)) perf += v;
+      }
     }
     return { target: parseFloat(prev.target || '0') || 0, perf };
   };
@@ -1015,7 +1042,7 @@ export default function Performances() {
   function renderIndicatorRow(p: AnnualPlan) {
     const bd = breakdowns[p.id];
     const baseline = findPrevBaseline(p.indicator);
-    const annualPerf = annualPerformance(p.id);
+    const annualPerf = annualPerformance(p);
     const planQ = (q: 1|2|3|4) => {
       const planValue = (bd ? (bd[`q${q}` as const] as string | null) : null) ?? '';
       // If plan is null, empty, or undefined, return 'N/A'

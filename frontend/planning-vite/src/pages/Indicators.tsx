@@ -23,7 +23,7 @@ import {
 
 type Department = { id: number; name: string; sector?: { id: number; name: string } };
 type IndicatorGroup = { id: number; name: string; department: Department };
-type Indicator = { id: number; name: string; unit?: string; description?: string; department: Department; groups?: IndicatorGroup[]; is_aggregatable?: boolean; is_incremental?: boolean };
+type Indicator = { id: number; name: string; unit?: string; description?: string; department: Department; groups?: IndicatorGroup[]; is_aggregatable?: boolean; is_incremental?: boolean; display_order?: number | null };
 type Sector = { id: number; name: string };
 
 export default function Indicators() {
@@ -42,6 +42,7 @@ export default function Indicators() {
   const [groupIds, setGroupIds] = useState<number[]>([]);
   const [isAggregatable, setIsAggregatable] = useState(true);
   const [isIncremental, setIsIncremental] = useState(false);
+  const [displayOrder, setDisplayOrder] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -155,6 +156,7 @@ export default function Indicators() {
     setGroupIds([]);
     setIsAggregatable(true);
     setIsIncremental(false);
+    setDisplayOrder('');
     setFormError(null);
     setIsFormVisible(true);
   };
@@ -194,7 +196,8 @@ export default function Indicators() {
         department_id: departmentId, 
         group_ids: groupIds,
         ...(groupIds.length > 0 && { is_aggregatable: isAggregatable }),
-        is_incremental: isIncremental
+        is_incremental: isIncremental,
+        display_order: displayOrder !== '' ? Number(displayOrder) : null,
       };
       
       if (editing) {
@@ -214,8 +217,28 @@ export default function Indicators() {
       }, 4000);
       
     } catch (e: any) {
-      const msg = e?.userMessage || getErrorMessage(e, 'Save failed');
-      setFormError(msg);
+      const data = e?.response?.data;
+      if (data) {
+        if (data.display_order) {
+          setFormError(`Display order ${displayOrder !== '' ? `"${displayOrder}" ` : ''}is already used by another indicator. Please choose a unique number.`);
+        } else if (data.detail) {
+          setFormError(data.detail);
+        } else {
+          const fieldMessages = Object.entries(data)
+            .map(([field, msgs]) => {
+              const label = field === 'display_order' ? 'Display Order'
+                          : field === 'name'          ? 'Name'
+                          : field === 'department_id' ? 'Department'
+                          : field;
+              const msg = Array.isArray(msgs) ? msgs[0] : msgs;
+              return `${label}: ${msg}`;
+            })
+            .join(' | ');
+          setFormError(fieldMessages || 'Save failed. Please try again.');
+        }
+      } else {
+        setFormError(e?.userMessage || getErrorMessage(e, 'Save failed. Please check your connection and try again.'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -232,6 +255,7 @@ export default function Indicators() {
     setGroupIds((i.groups || []).map((g) => g.id));
     setIsAggregatable(i.is_aggregatable ?? true);
     setIsIncremental(i.is_incremental ?? false);
+    setDisplayOrder(i.display_order ?? '');
     setIsFormVisible(true);
     
     // Scroll to form
@@ -419,7 +443,7 @@ export default function Indicators() {
             </div>
 
             <form onSubmit={onSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <Hash className="inline w-4 h-4 mr-1" />
@@ -468,6 +492,22 @@ export default function Indicators() {
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <ArrowUp className="inline w-4 h-4 mr-1" />
+                    Display Order
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={displayOrder}
+                    onChange={(e) => setDisplayOrder(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="e.g. 1, 2, 3"
+                    disabled={isSubmitting}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Must be unique across all KPIs</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -666,6 +706,7 @@ export default function Indicators() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Indicator</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
@@ -677,6 +718,11 @@ export default function Indicators() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {paged.map((indicator) => (
                     <tr key={indicator.id} className="hover:bg-gray-50 transition-colors duration-150">
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          {indicator.display_order ?? '—'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{indicator.name}</div>

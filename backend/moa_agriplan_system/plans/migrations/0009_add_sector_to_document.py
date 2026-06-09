@@ -20,6 +20,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='document',
             name='document_type',
-            field=models.CharField(choices=[('REPORT', 'Report'), ('NARATIVE', 'Narative'), ('POLICY', 'Policy'), ('GUIDELINE', 'Guideline'), ('PLAN', 'Plan'), ('DIRECTIVE', 'Directive'), ('CIRCULAR', 'Circular'), ('OTHER', 'Other')], default='OTHER', max_length=32),
+            field=models.CharField(choices=[('REPORT', 'Report'), ('NARRATIVE', 'Narrative'), ('POLICY', 'Policy'), ('GUIDELINE', 'Guideline'), ('PLAN', 'Plan'), ('DIRECTIVE', 'Directive'), ('CIRCULAR', 'Circular'), ('OTHER', 'Other')], default='OTHER', max_length=32),
         ),
     ]

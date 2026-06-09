@@ -21,6 +21,15 @@ class Department(models.Model):
 
 
 class IndicatorGroup(models.Model):
+    STATUS_HIGH   = 'HIGH'
+    STATUS_MEDIUM = 'MEDIUM'
+    STATUS_LOW    = 'LOW'
+    STATUS_CHOICES = [
+        (STATUS_HIGH,   'High'),
+        (STATUS_MEDIUM, 'Medium'),
+        (STATUS_LOW,    'Low'),
+    ]
+
     name = models.CharField(max_length=255)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, null=True, blank=True, related_name='indicator_groups')
     sector = models.ForeignKey(StateMinisterSector, on_delete=models.CASCADE, null=True, blank=True, related_name='sector_indicator_groups')
@@ -29,6 +38,14 @@ class IndicatorGroup(models.Model):
     is_label = models.BooleanField(
         default=False,
         help_text="Whether this indicator group is a label"
+    )
+    display_order = models.PositiveIntegerField(
+        null=True, blank=True, unique=True,
+        help_text="Position of this group in reports (must be unique; lower number appears first)"
+    )
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, null=True, blank=True,
+        help_text="Priority status — drives row colour in Excel export (High=blue, Medium=green, Low=grey)"
     )
 
     class Meta:
@@ -139,6 +156,10 @@ class Indicator(models.Model):
     unit = models.CharField(max_length=64, blank=True)
     description = models.TextField(blank=True)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='indicators')
+    display_order = models.PositiveIntegerField(
+        null=True, blank=True, unique=True,
+        help_text="Position of this KPI within its group (must be unique; lower number appears first)"
+    )
     groups = models.ManyToManyField(IndicatorGroup, blank=True, related_name='indicators')
     is_aggregatable = models.BooleanField(
         default=True,

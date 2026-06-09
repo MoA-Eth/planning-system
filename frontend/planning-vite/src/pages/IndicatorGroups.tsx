@@ -16,7 +16,9 @@ import {
   ChevronDown,
   Hash,
   PieChart,
-  AlertCircle
+  AlertCircle,
+  ArrowUpDown,
+  Signal
 } from 'lucide-react';
 
 export default function IndicatorGroups() {
@@ -33,6 +35,8 @@ export default function IndicatorGroups() {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [isLabel, setIsLabel] = useState(false);
+  const [displayOrder, setDisplayOrder] = useState<number | ''>('');
+  const [groupStatus, setGroupStatus] = useState<'HIGH' | 'MEDIUM' | 'LOW' | ''>('');
   const [parentId, setParentId] = useState<number | null>(null);
   const [editing, setEditing] = useState<IndicatorGroup | null>(null);
   const [loading, setLoading] = useState(false);
@@ -173,6 +177,8 @@ export default function IndicatorGroups() {
         name, 
         unit: unit || undefined,
         is_label: isLabel,
+        display_order: displayOrder !== '' ? Number(displayOrder) : null,
+        status: groupStatus || null,
         parent_id: parentId || null
       };
       
@@ -192,6 +198,8 @@ export default function IndicatorGroups() {
       setName('');
       setUnit('');
       setIsLabel(false);
+      setDisplayOrder('');
+      setGroupStatus('');
       setParentId(null);
       setDepartmentId('');
       setSectorId('');
@@ -201,7 +209,30 @@ export default function IndicatorGroups() {
       setShowForm(false);
       loadGroups();
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Save failed');
+      const data = e?.response?.data;
+      if (data) {
+        if (data.display_order) {
+          setError(`Display order ${displayOrder ? `"${displayOrder}" ` : ''}is already used by another group. Please choose a unique number.`);
+        } else if (data.status) {
+          setError('Invalid status selected. Please choose High, Medium, or Low.');
+        } else if (data.detail) {
+          setError(data.detail);
+        } else {
+          const fieldMessages = Object.entries(data)
+            .map(([field, msgs]) => {
+              const label = field === 'display_order' ? 'Display Order'
+                          : field === 'status'        ? 'Status'
+                          : field === 'name'          ? 'Name'
+                          : field;
+              const msg = Array.isArray(msgs) ? msgs[0] : msgs;
+              return `${label}: ${msg}`;
+            })
+            .join(' | ');
+          setError(fieldMessages || 'Save failed. Please try again.');
+        }
+      } else {
+        setError('Save failed. Please check your connection and try again.');
+      }
     }
   };
 
@@ -210,6 +241,8 @@ export default function IndicatorGroups() {
     setName(g.name);
     setUnit(g.unit || '');
     setIsLabel(g.is_label || false);
+    setDisplayOrder(g.display_order ?? '');
+    setGroupStatus((g.status as any) || '');
     setParentId(g.parent_id || null);
     if (g.department) {
       setAssociationType('department');
@@ -246,6 +279,8 @@ export default function IndicatorGroups() {
     setName('');
     setUnit('');
     setIsLabel(false);
+    setDisplayOrder('');
+    setGroupStatus('');
     setParentId(null);
     setDepartmentId('');
     setSectorId('');
@@ -649,7 +684,7 @@ export default function IndicatorGroups() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <Hash className="inline w-4 h-4 mr-1" />
@@ -663,6 +698,41 @@ export default function IndicatorGroups() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Unit for this group and its indicators (optional)</p>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <ArrowUpDown className="inline w-4 h-4 mr-1" />
+                    Display Order
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={displayOrder}
+                    onChange={(e) => setDisplayOrder(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                    placeholder="e.g. 1, 2, 3 …"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Controls order in reports — must be unique</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Signal className="inline w-4 h-4 mr-1" />
+                    Status
+                  </label>
+                  <select
+                    value={groupStatus}
+                    onChange={(e) => setGroupStatus(e.target.value as any)}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  >
+                    <option value="">— None —</option>
+                    <option value="HIGH">High (Orange rows)</option>
+                    <option value="MEDIUM">Medium (Green rows)</option>
+                    <option value="LOW">Low (Grey rows)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Drives row colour in Excel export</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <Layers className="inline w-4 h-4 mr-1" />
@@ -735,9 +805,6 @@ export default function IndicatorGroups() {
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="flex items-center gap-3 text-sm font-medium text-gray-700 mb-2 cursor-pointer">
                     <input
@@ -751,10 +818,7 @@ export default function IndicatorGroups() {
                       Is Label
                     </span>
                   </label>
-                  <p className="text-xs text-gray-500 mt-1 ml-7">Whether this indicator group is a label</p>
-                </div>
-                <div>
-                  {/* Empty div for grid alignment */}
+                  <p className="text-xs text-gray-500 mt-1 ml-7">Whether this group is a section header</p>
                 </div>
               </div>
 
@@ -814,8 +878,9 @@ export default function IndicatorGroups() {
             <table className="w-full">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Order</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Group</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Department</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Sector</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
@@ -824,7 +889,7 @@ export default function IndicatorGroups() {
               <tbody className="divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center">
+                    <td colSpan={6} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-8 h-8 border-3 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
                         <p className="text-gray-600">Loading indicator groups...</p>
@@ -833,7 +898,7 @@ export default function IndicatorGroups() {
                   </tr>
                 ) : filteredGroups.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center">
+                    <td colSpan={6} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                           <Layers className="w-6 h-6 text-gray-400" />
@@ -842,8 +907,8 @@ export default function IndicatorGroups() {
                           {groups.length === 0 ? 'No indicator groups created yet' : 'No groups match your filters'}
                         </p>
                         <p className="text-gray-500 text-sm">
-                          {groups.length === 0 
-                            ? 'Start by creating your first indicator group' 
+                          {groups.length === 0
+                            ? 'Start by creating your first indicator group'
                             : 'Try adjusting your search or filters'}
                         </p>
                       </div>
@@ -851,13 +916,20 @@ export default function IndicatorGroups() {
                   </tr>
                 ) : (
                   filteredGroups.map((g) => (
-                    <tr 
-                      key={g.id} 
-                      className="hover:bg-purple-50/50 transition-colors duration-150 group"
+                    <tr
+                      key={g.id}
+                      className="transition-colors duration-150 group"
+                      style={{
+                        backgroundColor:
+                          g.status === 'HIGH'   ? '#FDF3E3' :
+                          g.status === 'MEDIUM' ? '#EEF7E8' :
+                          g.status === 'LOW'    ? '#F3F3F3' :
+                          undefined
+                      }}
                     >
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          #{g.id}
+                          {g.display_order ?? '—'}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -877,6 +949,21 @@ export default function IndicatorGroups() {
                             )}
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {g.status ? (
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                            style={{
+                              background: g.status === 'HIGH' ? '#F5CC94' : g.status === 'MEDIUM' ? '#52992F' : '#ADADAD',
+                              color: g.status === 'MEDIUM' ? '#fff' : '#1a1a1a'
+                            }}
+                          >
+                            {g.status === 'HIGH' ? 'High' : g.status === 'MEDIUM' ? 'Medium' : 'Low'}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -947,7 +1034,17 @@ export default function IndicatorGroups() {
             ) : (
               <div className="divide-y divide-gray-200">
                 {filteredGroups.map((g) => (
-                  <div key={g.id} className="p-4 hover:bg-gray-50 transition-colors duration-150">
+                  <div
+                  key={g.id}
+                  className="p-4 transition-colors duration-150"
+                  style={{
+                    backgroundColor:
+                      g.status === 'HIGH'   ? '#FDF3E3' :
+                      g.status === 'MEDIUM' ? '#EEF7E8' :
+                      g.status === 'LOW'    ? '#F3F3F3' :
+                      undefined
+                  }}
+                >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-purple-100 rounded-lg">

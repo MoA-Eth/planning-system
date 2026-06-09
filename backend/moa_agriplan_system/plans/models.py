@@ -142,7 +142,7 @@ class Document(models.Model):
     description = models.TextField(blank=True)
     document_type = models.CharField(max_length=32, choices=DocumentType.choices, default=DocumentType.OTHER)
     file = models.FileField(upload_to='documents/%Y/%m/%d/')
-    sector = models.ForeignKey('indicators.StateMinisterSector', on_delete=models.PROTECT, related_name='documents')
+    sector = models.ForeignKey('indicators.StateMinisterSector', on_delete=models.PROTECT, null=True, blank=True, related_name='documents')
     department = models.ForeignKey('indicators.Department', on_delete=models.PROTECT, null=True, blank=True, related_name='documents')
     year = models.PositiveIntegerField(null=True, blank=True, help_text='Ethiopian fiscal year (e.g. 2017)')
     quarter = models.CharField(max_length=2, choices=Quarter.choices, null=True, blank=True)

@@ -37,6 +37,7 @@ from plans.views import (
     minister_review_summary,
     superadmin_quarterly_data,
     superadmin_update_quarterly,
+    excel_export,
 )
 
 # Health check views
@@ -80,6 +81,7 @@ urlpatterns = [
     path('api/hierarchical-spreadsheet/', hierarchical_spreadsheet, name='api-hierarchical-spreadsheet'),
     path('api/superadmin/quarterly-data/', superadmin_quarterly_data, name='api-superadmin-quarterly-data'),
     path('api/superadmin/update-quarterly/', superadmin_update_quarterly, name='api-superadmin-update-quarterly'),
+    path('api/excel-export/', excel_export, name='api-excel-export'),
     path('health/', health_check, name='health'),
     path('api/', api_check, name='api-check'),
     path('', include(router.urls)),

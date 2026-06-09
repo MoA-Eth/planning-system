@@ -1251,3 +1251,359 @@ def superadmin_update_quarterly(request):
             return Response({'detail': 'Performance status updated successfully.', 'new_status': new_value})
 
     return Response({'detail': 'Invalid action type. Use plan_value, plan_status, performance_value, or performance_status.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ---------------------------------------------------------------------------
+# Excel Export  (hierarchical grouping mirrors the Spreadsheet view)
+# ---------------------------------------------------------------------------
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def excel_export(request):
+    """Stream a hierarchical Excel file with KPI plan & performance data.
+
+    Rows are organised identically to the Spreadsheet view:
+      Sector → Department → Group tree (sub-groups then indicators) → Ungrouped
+
+    Group rows show aggregated totals (is_aggregatable indicators only).
+    Label groups are section headers with no values.
+
+    Query params:
+      - year   : Gregorian fiscal year (e.g. 2024)
+      - period : 3 | 6 | 9 | 12  (months; maps to Q1–Q4)
+
+    Columns (8):
+      KPI | Unit | [Year] Plan | Q[X] Plan | Q[X] Performance |
+      [N] Month Plan Target | [N] Month Performance | [N] Month Performance %
+    """
+    import io
+    from django.http import HttpResponse
+    from decimal import Decimal as _D
+
+    allowed_roles = {'STRATEGIC_STAFF', 'EXECUTIVE'}
+    user_role = getattr(request.user, 'role', '').upper()
+    if not request.user.is_superuser and user_role not in allowed_roles:
+        return Response({'detail': 'You do not have permission to export Excel reports.'}, status=status.HTTP_403_FORBIDDEN)
+
+    year_param   = request.query_params.get('year')
+    period_param = request.query_params.get('period')
+
+    if not year_param or not period_param:
+        return Response(
+            {'detail': 'Both year and period query params are required.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    period_to_quarter = {'3': 1, '6': 2, '9': 3, '12': 4}
+    quarter_num = period_to_quarter.get(str(period_param))
+    if not quarter_num:
+        return Response(
+            {'detail': 'period must be one of: 3, 6, 9, 12.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        year   = int(year_param)
+        months = int(period_param)
+    except ValueError:
+        return Response({'detail': 'Invalid year or period.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Convert Gregorian year to Ethiopian calendar year for display (2025 GC = 2018 EC)
+    et_year = year - 7
+
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return Response(
+            {'detail': 'openpyxl is not installed. Run: pip install openpyxl'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    from indicators.models import IndicatorGroup, Indicator
+
+    # ── Pre-fetch all plan / breakdown / performance data in bulk ─────────────
+    all_plans = {
+        ap.indicator_id: ap
+        for ap in AnnualPlan.objects.filter(year=year).select_related('indicator')
+    }
+    all_breakdowns = {
+        bd.plan.indicator_id: bd
+        for bd in QuarterlyBreakdown.objects.filter(plan__year=year).select_related('plan')
+    }
+    all_perfs = {}
+    for perf in QuarterlyPerformance.objects.filter(plan__year=year).select_related('plan'):
+        all_perfs[(perf.plan.indicator_id, perf.quarter)] = perf
+
+    # ── Compute the 8-column values for a single indicator ───────────────────
+    def ind_vals(indicator):
+        plan = all_plans.get(indicator.id)
+        bd   = all_breakdowns.get(indicator.id)
+
+        qx_plan = None
+        if bd and indicator.is_quarter_applicable(quarter_num):
+            qx_plan = getattr(bd, f'q{quarter_num}', None)
+
+        qx_perf = None
+        p = all_perfs.get((indicator.id, quarter_num))
+        if p and p.value is not None and indicator.is_quarter_applicable(quarter_num):
+            qx_perf = p.value
+
+        cum_plan = None
+        if bd:
+            if indicator.is_incremental:
+                for q in range(quarter_num, 0, -1):
+                    if indicator.is_quarter_applicable(q):
+                        v = getattr(bd, f'q{q}', None)
+                        if v is not None:
+                            cum_plan = v
+                            break
+            else:
+                vlist = []
+                for q in range(1, quarter_num + 1):
+                    if indicator.is_quarter_applicable(q):
+                        v = getattr(bd, f'q{q}', None)
+                        if v is not None:
+                            vlist.append(v)
+                if vlist:
+                    cum_plan = sum(vlist, _D('0'))
+
+        cum_perf = None
+        if indicator.is_incremental:
+            for q in range(quarter_num, 0, -1):
+                p2 = all_perfs.get((indicator.id, q))
+                if p2 and p2.value is not None:
+                    cum_perf = p2.value
+                    break
+        else:
+            pv = []
+            for q in range(1, quarter_num + 1):
+                p2 = all_perfs.get((indicator.id, q))
+                if p2 and p2.value is not None:
+                    pv.append(p2.value)
+            if pv:
+                cum_perf = sum(pv, _D('0'))
+
+        pct = None
+        if cum_plan is not None and cum_plan != 0 and cum_perf is not None:
+            pct = round(float(cum_perf) / float(cum_plan) * 100, 2)
+
+        return {
+            'annual_target': float(plan.target) if plan else None,
+            'qx_plan':  float(qx_plan)  if qx_plan  is not None else None,
+            'qx_perf':  float(qx_perf)  if qx_perf  is not None else None,
+            'cum_plan': float(cum_plan)  if cum_plan is not None else None,
+            'cum_perf': float(cum_perf)  if cum_perf is not None else None,
+            'pct':      pct,
+            'unit':     indicator.get_effective_unit() or '',
+            'is_aggregatable': indicator.is_aggregatable,
+        }
+
+    from django.db.models import F as _F
+
+    # ── Recursive tree builder — ordered by display_order ────────────────────
+    def build_node(group):
+        child_nodes = [
+            build_node(c)
+            for c in group.children.all()
+            .order_by(_F('display_order').asc(nulls_last=True), 'name')
+        ]
+        ind_list = list(
+            group.indicators
+            .order_by(_F('display_order').asc(nulls_last=True), 'name')
+        )
+        ind_nodes = [
+            {'type': 'indicator', 'name': ind.name, 'is_label': False,
+             'unit': ind.get_effective_unit() or '', 'vals': ind_vals(ind)}
+            for ind in ind_list
+        ]
+
+        grp = {'annual_target': None, 'qx_plan': None, 'qx_perf': None,
+               'cum_plan': None, 'cum_perf': None, 'pct': None}
+
+        if not group.is_label:
+            agg_iv = [n['vals'] for n in ind_nodes if n['vals']['is_aggregatable']]
+            agg_cv = [c['grp']  for c in child_nodes if not c['is_label']]
+
+            for fld in ('annual_target', 'qx_plan', 'qx_perf', 'cum_plan', 'cum_perf'):
+                parts = [v[fld] for v in agg_iv if v[fld] is not None]
+                parts += [v[fld] for v in agg_cv if v[fld] is not None]
+                if parts:
+                    grp[fld] = sum(parts)
+
+            if grp['cum_plan'] and grp['cum_plan'] != 0 and grp['cum_perf'] is not None:
+                grp['pct'] = round(grp['cum_perf'] / grp['cum_plan'] * 100, 2)
+
+        return {
+            'type': 'group', 'name': group.name, 'is_label': group.is_label,
+            'unit': group.get_inherited_unit(), 'grp': grp,
+            'status': group.status,
+            'children': child_nodes, 'indicators': ind_nodes,
+        }
+
+    # ── Flatten tree — each group coloured by its own status only ────────────
+    def flatten(nodes, level, out):
+        for n in nodes:
+            node_status = n.get('status') if n['type'] == 'group' else None
+            out.append({**n, 'level': level, 'row_status': node_status})
+            if n['type'] == 'group':
+                flatten(n.get('children',   []), level + 1, out)
+                flatten(n.get('indicators', []), level + 1, out)
+
+    # ── Root groups ordered strictly by display_order ─────────────────────────
+    root_groups = (
+        IndicatorGroup.objects
+        .filter(parent__isnull=True)
+        .prefetch_related('children', 'indicators')
+        .order_by(_F('display_order').asc(nulls_last=True), 'name')
+    )
+
+    # ── Workbook & styles ─────────────────────────────────────────────────────
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Q{quarter_num} {et_year}"
+
+    _thin     = Side(style='thin', color='CCCCCC')
+    _thin_brd = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+
+    _hdr_font  = Font(bold=True, color='000000', size=10)
+    _hdr_fill  = PatternFill(start_color='F6BE92', end_color='F6BE92', fill_type='solid')
+    _hdr_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    # Status-based fills (High=orange, Medium=dark-green, Low=grey)
+    _status_fill = {
+        'HIGH':   PatternFill(start_color='4997D0', end_color='4997D0', fill_type='solid'),
+        'MEDIUM': PatternFill(start_color='A0DB5A', end_color='A0DB5A', fill_type='solid'),
+        'LOW':    PatternFill(start_color='DBDBDB', end_color='DBDBDB', fill_type='solid'),
+    }
+    # Text colour per status (white on dark green, dark on the lighter colours)
+    _status_txt = {'HIGH': 'FFFFFF', 'MEDIUM': '1A1A1A', 'LOW': '1A1A1A'}
+    _no_status_fill = None
+
+    _label_font = Font(bold=True, color='000000', size=10)
+    _label_fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
+    _data_font  = Font(bold=True, color='000000', size=10)
+
+    _left_align  = Alignment(horizontal='left',   vertical='center', wrap_text=True)
+    _ctr_align   = Alignment(horizontal='center', vertical='center')
+    _right_align = Alignment(horizontal='right',  vertical='center')
+
+    NUM_FMT_COMMA = '#,##0.00'
+    NUM_FMT_PCT   = '0.00"%"'
+
+    headers    = [
+        'የቁልፍ አፈፃፀም አመልካቾች', 'መለኪያ', f'{et_year} ዕቅድ',
+        f' የ{quarter_num}ኛ ሩብ ዓመት ዒላማ', f' የQ{quarter_num}ኛ ሩብ ዓመት አፈፃፀም',
+        f' የ{months}ወር ዒላማ', f' የ{months} ወር አፈፃፀም',
+        f'የ{months} ወር አፈፃፀም በመቶኛ',
+    ]
+    col_widths = [52, 12, 15, 15, 20, 24, 24, 26]
+
+    # Column header row
+    for col, (hdr, width) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(row=1, column=col, value=hdr)
+        cell.font = _hdr_font; cell.fill = _hdr_fill
+        cell.alignment = _hdr_align; cell.border = _thin_brd
+        ws.column_dimensions[get_column_letter(col)].width = width
+    ws.row_dimensions[1].height = 42
+
+    # ── Row-writing helpers ───────────────────────────────────────────────────
+    row_num  = 2
+
+    def write_data_row(row_data, d_font, d_fill):
+        nonlocal row_num
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=row_num, column=col, value=val)
+            cell.border = _thin_brd
+            cell.font   = d_font
+            if d_fill:
+                cell.fill = d_fill
+            if col == 1:
+                cell.alignment = _left_align
+            elif col == 2:
+                cell.alignment = _ctr_align
+            elif col == 8:
+                cell.alignment = _right_align
+                if val is not None:
+                    cell.number_format = NUM_FMT_PCT
+            else:
+                cell.alignment = _right_align
+                if val is not None and col > 2:
+                    cell.number_format = NUM_FMT_COMMA
+        ws.row_dimensions[row_num].height = 18
+        row_num += 1
+
+    def write_flat_rows(flat_rows):
+        for fr in flat_rows:
+            level  = fr['level']
+            indent = '  ' * level
+            name   = indent + fr['name']
+            rs     = fr.get('row_status')  # 'HIGH' | 'MEDIUM' | 'LOW' | None
+
+            s_fill = _status_fill.get(rs) if rs else _no_status_fill
+            s_txt  = _status_txt.get(rs, '1A1A1A') if rs else '1A1A1A'
+
+            if fr['type'] == 'group':
+                if fr.get('is_label'):
+                    write_data_row(
+                        [name, fr.get('unit', ''), None, None, None, None, None, None],
+                        _label_font, _label_fill,
+                    )
+                else:
+                    grp_v = fr.get('grp', {})
+                    write_data_row(
+                        [name, fr.get('unit', ''),
+                         grp_v.get('annual_target'), grp_v.get('qx_plan'),
+                         grp_v.get('qx_perf'),       grp_v.get('cum_plan'),
+                         grp_v.get('cum_perf'),       grp_v.get('pct')],
+                        Font(bold=True, color='000000', size=10), s_fill,
+                    )
+            else:
+                v = fr.get('vals', {})
+                write_data_row(
+                    [name, fr.get('unit', ''),
+                     v.get('annual_target'), v.get('qx_plan'),
+                     v.get('qx_perf'),       v.get('cum_plan'),
+                     v.get('cum_perf'),       v.get('pct')],
+                    Font(bold=True, color='000000', size=10), s_fill,
+                )
+
+    # ── Write all root groups strictly in display_order sequence ─────────────
+    for grp in root_groups:
+        node = build_node(grp)
+        flat = []
+        flatten([node], 0, flat)
+        write_flat_rows(flat)
+
+    # ── Ungrouped indicators (no sector/dept headers) ─────────────────────────
+    ungrouped_inds = list(
+        Indicator.objects
+        .filter(groups__isnull=True)
+        .order_by(_F('display_order').asc(nulls_last=True), 'name')
+    )
+    for ind in ungrouped_inds:
+        v = ind_vals(ind)
+        write_data_row(
+            [ind.name, v['unit'],
+             v.get('annual_target'), v.get('qx_plan'),
+             v.get('qx_perf'),       v.get('cum_plan'),
+             v.get('cum_perf'),       v.get('pct')],
+            _data_font, _no_status_fill,
+        )
+
+    # Freeze header row
+    ws.freeze_panes = ws['A2']
+
+    # ── Stream response ───────────────────────────────────────────────────────
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"MOA_Q{quarter_num}_{months}Month_Report_{year}.xlsx"
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

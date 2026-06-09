@@ -301,38 +301,38 @@ def get_group_performance_for_period(group, year: int, quarter_months: int = Non
     
     total = Decimal('0')
     has_data = False
-    
+
     # Separate incremental and non-incremental indicators
     incremental_indicators = [ind for ind in direct_indicators if ind.is_incremental]
     non_incremental_indicators = [ind for ind in direct_indicators if not ind.is_incremental]
-    
-    # For full year (no quarter_months), incremental indicators use Q4 only
-    if not quarter_months and incremental_indicators:
-        applicable_incremental = [
-            ind for ind in incremental_indicators
-            if ind.is_quarter_applicable(4)
-        ]
-        if applicable_incremental:
-            q4_total = QuarterlyPerformance.objects.filter(
-                plan__indicator__in=applicable_incremental,
+
+    # For incremental indicators: use the last non-null quarter value within the period
+    if incremental_indicators:
+        perfs = (
+            QuarterlyPerformance.objects
+            .filter(
+                plan__indicator__in=incremental_indicators,
                 plan__year=year,
-                quarter=4
-            ).aggregate(
-                total=Sum(Coalesce('value', Value(Decimal('0')), output_field=DecimalField()))
-            )['total'] or Decimal('0')
-            total += q4_total
+                quarter__in=quarters_to_include,
+            )
+            .select_related('plan__indicator')
+            .order_by('quarter')
+        )
+        # Keep the highest-quarter non-null value per indicator
+        last_val = {}
+        for perf in perfs:
+            if perf.value is not None:
+                last_val[perf.plan.indicator_id] = perf.value
+        for val in last_val.values():
+            total += val
             has_data = True
-    
-    # Get performance data for non-incremental indicators (or all indicators if quarter_months is set)
-    indicators_for_quarterly = non_incremental_indicators if not quarter_months else list(direct_indicators)
-    
+
+    # For non-incremental indicators: sum all applicable quarters in the period
     for quarter in quarters_to_include:
-        # Filter indicators where this quarter is applicable
         applicable_indicators = [
-            ind for ind in indicators_for_quarterly 
+            ind for ind in non_incremental_indicators
             if ind.is_quarter_applicable(quarter)
         ]
-        
         if applicable_indicators:
             quarter_total = QuarterlyPerformance.objects.filter(
                 plan__indicator__in=applicable_indicators,
@@ -341,7 +341,6 @@ def get_group_performance_for_period(group, year: int, quarter_months: int = Non
             ).aggregate(
                 total=Sum(Coalesce('value', Value(Decimal('0')), output_field=DecimalField()))
             )['total'] or Decimal('0')
-            
             total += quarter_total
             has_data = True
     

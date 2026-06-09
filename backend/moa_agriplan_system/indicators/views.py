@@ -248,28 +248,48 @@ def state_minister_dashboard(request):
                 q for q in [1, 2, 3, 4]
                 if quarter_months_map[q] <= quarter_months
             ]
-            performance = QuarterlyPerformance.objects.filter(
-                plan=annual_plan, quarter__in=filtered_quarters
-            ).aggregate(total=Sum('value'))['total'] or 0
-            
+            if indicator.is_incremental:
+                # Use the last non-null quarter value within the period
+                performance = 0
+                for q in sorted(filtered_quarters, reverse=True):
+                    p = QuarterlyPerformance.objects.filter(plan=annual_plan, quarter=q).first()
+                    if p and p.value is not None:
+                        performance = float(p.value)
+                        break
+            else:
+                performance = QuarterlyPerformance.objects.filter(
+                    plan=annual_plan, quarter__in=filtered_quarters
+                ).aggregate(total=Sum('value'))['total'] or 0
+
             quarterly_target = 0
             if breakdown:
-                if quarter_months == 3:
-                    quarterly_target = float(breakdown.q1 or 0)
-                elif quarter_months == 6:
-                    quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0)
-                elif quarter_months == 9:
-                    quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0) + float(breakdown.q3 or 0)
-                elif quarter_months == 12:
-                    quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0) + float(breakdown.q3 or 0) + float(breakdown.q4 or 0)
+                if indicator.is_incremental:
+                    for q in sorted(filtered_quarters, reverse=True):
+                        v = getattr(breakdown, f'q{q}', None)
+                        if v is not None:
+                            quarterly_target = float(v)
+                            break
+                else:
+                    if quarter_months == 3:
+                        quarterly_target = float(breakdown.q1 or 0)
+                    elif quarter_months == 6:
+                        quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0)
+                    elif quarter_months == 9:
+                        quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0) + float(breakdown.q3 or 0)
+                    elif quarter_months == 12:
+                        quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0) + float(breakdown.q3 or 0) + float(breakdown.q4 or 0)
             else:
                 quarterly_target = (float(annual_plan.target) * quarter_months) / 12
             target = quarterly_target
         else:
-            # For incremental indicators, full-year performance = Q4 value only
+            # For incremental indicators: use the last non-null quarter value
             if indicator.is_incremental:
-                q4_perf = QuarterlyPerformance.objects.filter(plan=annual_plan, quarter=4).first()
-                performance = float(q4_perf.value) if q4_perf and q4_perf.value is not None else 0
+                performance = 0
+                for q in range(4, 0, -1):
+                    p = QuarterlyPerformance.objects.filter(plan=annual_plan, quarter=q).first()
+                    if p and p.value is not None:
+                        performance = float(p.value)
+                        break
             else:
                 performance = QuarterlyPerformance.objects.filter(plan=annual_plan).aggregate(
                     total=Sum('value')
@@ -338,36 +358,50 @@ def state_minister_dashboard(request):
                     breakdown = QuarterlyBreakdown.objects.filter(plan=annual_plan).first()
                     
                     if quarter_months:
-                        # Filter performance for specified months
                         quarter_months_map = {1: 3, 2: 6, 3: 9, 4: 12}
                         filtered_quarters = [
-                            q for q in [1, 2, 3, 4] 
+                            q for q in [1, 2, 3, 4]
                             if quarter_months_map[q] <= quarter_months
                         ]
-                        performance = QuarterlyPerformance.objects.filter(
-                            plan=annual_plan, quarter__in=filtered_quarters
-                        ).aggregate(total=Sum('value'))['total'] or 0
-                        
-                        # Calculate quarterly target
+                        if indicator.is_incremental:
+                            performance = 0
+                            for q in sorted(filtered_quarters, reverse=True):
+                                p = QuarterlyPerformance.objects.filter(plan=annual_plan, quarter=q).first()
+                                if p and p.value is not None:
+                                    performance = float(p.value)
+                                    break
+                        else:
+                            performance = QuarterlyPerformance.objects.filter(
+                                plan=annual_plan, quarter__in=filtered_quarters
+                            ).aggregate(total=Sum('value'))['total'] or 0
+
                         quarterly_target = 0
                         if breakdown:
-                            if quarter_months == 3:
-                                quarterly_target = float(breakdown.q1 or 0)
-                            elif quarter_months == 6:
-                                quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0)
-                            elif quarter_months == 9:
-                                quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0) + float(breakdown.q3 or 0)
+                            if indicator.is_incremental:
+                                for q in sorted(filtered_quarters, reverse=True):
+                                    v = getattr(breakdown, f'q{q}', None)
+                                    if v is not None:
+                                        quarterly_target = float(v)
+                                        break
+                            else:
+                                if quarter_months == 3:
+                                    quarterly_target = float(breakdown.q1 or 0)
+                                elif quarter_months == 6:
+                                    quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0)
+                                elif quarter_months == 9:
+                                    quarterly_target = float(breakdown.q1 or 0) + float(breakdown.q2 or 0) + float(breakdown.q3 or 0)
                         else:
-                            # Fallback to proportional
                             quarterly_target = (float(annual_plan.target) * quarter_months) / 12
-                        
+
                         target = quarterly_target
                     else:
-                        # Get all quarters performance
-                        # For incremental indicators, full-year performance = Q4 value only
                         if indicator.is_incremental:
-                            q4_perf = QuarterlyPerformance.objects.filter(plan=annual_plan, quarter=4).first()
-                            performance = float(q4_perf.value) if q4_perf and q4_perf.value is not None else 0
+                            performance = 0
+                            for q in range(4, 0, -1):
+                                p = QuarterlyPerformance.objects.filter(plan=annual_plan, quarter=q).first()
+                                if p and p.value is not None:
+                                    performance = float(p.value)
+                                    break
                         else:
                             performance = QuarterlyPerformance.objects.filter(plan=annual_plan).aggregate(
                                 total=Sum('value')

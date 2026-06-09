@@ -354,30 +354,6 @@ const MenuIcon = ({ name, active }: { name: string; active?: boolean }) => {
 
 
 
-    case 'Spreadsheet':
-
-
-
-      return (
-
-
-
-        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
-
-
-
-          <path d="M3 3h18v18H3V3zm2 2v4h6V5H5zm8 0v4h6V5h-6zM5 11v4h6v-4H5zm8 0v4h6v-4h-6zM5 17v2h6v-2H5zm8 0v2h6v-2h-6z"/>
-
-
-
-        </svg>
-
-
-
-      );
-
-
-
     case 'Quarterly Manager':
 
 
@@ -511,6 +487,30 @@ const MenuIcon = ({ name, active }: { name: string; active?: boolean }) => {
 
 
           <path d="M9 16h6v-6h4l-7-7-7 7h4v6Zm-4 2h14v2H5v-2Z"/>
+
+
+
+        </svg>
+
+
+
+      );
+
+
+
+    case 'Excel Export':
+
+
+
+      return (
+
+
+
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+
+
+
+          <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 1.5V9h4.5L13 3.5zM12 17l-4-4h2.5v-3h3v3H16l-4 4z"/>
 
 
 
@@ -740,7 +740,7 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
-      { label: 'Advisor Overall Comment', to: '/advisor-comment' },
+      { label: 'Advisor Comments', to: '/advisor-comments' },
 
 
 
@@ -776,10 +776,6 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
-      { label: 'Spreadsheet', to: '/spreadsheet' },
-
-
-
       { label: 'Document Upload', to: '/document-upload' },
 
 
@@ -804,10 +800,6 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
-      { label: 'Spreadsheet', to: '/spreadsheet' },
-
-
-
       { label: 'Documents', to: '/documents' },
 
 
@@ -828,7 +820,7 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
-      { label: 'Spreadsheet', to: '/spreadsheet' },
+      { label: 'Excel Export', to: '/excel-export' },
 
 
 
@@ -852,7 +844,7 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
 
-      { label: 'Spreadsheet', to: '/spreadsheet' },
+      { label: 'Excel Export', to: '/excel-export' },
 
 
 
@@ -871,10 +863,13 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
       { label: 'Dashboard', to: '/minister-view' },
 
 
+
       { label: 'Overall Dashboard', to: '/overall-dashboard' },
 
 
+
       { label: 'Detail Analysis', to: '/detail-analysis' },
+
 
 
     ];
@@ -938,10 +933,6 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
   }, [role, isSuper]);
-
-
-
-
 
 
 

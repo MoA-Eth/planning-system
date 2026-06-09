@@ -69,9 +69,11 @@ import OverallDashboard from './pages/OverallDashboard'
 
 import DetailAnalysis from './pages/DetailAnalysis'
 
-import HierarchicalSpreadsheet from './pages/HierarchicalSpreadsheet'
-
 import SuperAdminQuarterlyManager from './pages/SuperAdminQuarterlyManager'
+
+import ExcelExport from './pages/ExcelExport'
+
+import ExcelExportRoute from './routes/ExcelExportRoute'
 
 import PrivacyPolicy from './pages/PrivacyPolicy'
 
@@ -608,26 +610,6 @@ function App() {
 
       <Route
 
-        path="/spreadsheet"
-
-        element={
-
-          <ProtectedRoute>
-
-            <DashboardLayout>
-
-              <HierarchicalSpreadsheet />
-
-            </DashboardLayout>
-
-          </ProtectedRoute>
-
-        }
-
-      />
-
-      <Route
-
         path="/detail-analysis"
 
         element={
@@ -657,6 +639,26 @@ function App() {
             </DashboardLayout>
 
           </DocumentUploadRoute>
+
+        }
+
+      />
+
+      <Route
+
+        path="/excel-export"
+
+        element={
+
+          <ExcelExportRoute>
+
+            <DashboardLayout>
+
+              <ExcelExport />
+
+            </DashboardLayout>
+
+          </ExcelExportRoute>
 
         }
 

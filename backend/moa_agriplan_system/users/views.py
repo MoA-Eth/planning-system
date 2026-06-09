@@ -379,15 +379,34 @@ class MinisterDashboardView(APIView):
         # Total achieved performance (sum of quarterly performances, filtered by quarter_months)
         if quarter_months:
             quarter_months_map = {1: 3, 2: 6, 3: 9, 4: 12}
-            filtered_perfs = [
-                p for p in perfs_qs 
+            in_period = [
+                p for p in perfs_qs
                 if quarter_months_map[p.quarter] <= quarter_months
             ]
+            # For incremental indicators: keep only the last non-null quarter within the period
+            last_incremental = {}
+            for p in in_period:
+                if p.plan.indicator.is_incremental and p.value is not None:
+                    prev = last_incremental.get(p.plan_id)
+                    if prev is None or p.quarter > prev.quarter:
+                        last_incremental[p.plan_id] = p
+            filtered_perfs = [
+                p for p in in_period
+                if not p.plan.indicator.is_incremental
+                or last_incremental.get(p.plan_id) is p
+            ]
         else:
-            # For full year: exclude Q1-Q3 for incremental indicators (Q4 already has cumulative)
+            # For full year: for incremental indicators keep only the last non-null quarter per indicator
+            last_incremental = {}
+            for p in perfs_qs:
+                if p.plan.indicator.is_incremental and p.value is not None:
+                    prev = last_incremental.get(p.plan_id)
+                    if prev is None or p.quarter > prev.quarter:
+                        last_incremental[p.plan_id] = p
             filtered_perfs = [
                 p for p in perfs_qs
-                if not p.plan.indicator.is_incremental or p.quarter == 4
+                if not p.plan.indicator.is_incremental
+                or last_incremental.get(p.plan_id) is p
             ]
         
         total_achieved = sum(float(p.value) for p in filtered_perfs if p.value is not None)
@@ -792,13 +811,28 @@ class IndicatorPerformanceView(APIView):
             
             if quarter_months:
                 quarter_months_map = {1: 3, 2: 6, 3: 9, 4: 12}
-                filtered_perfs = [p for p in indicator_perfs if quarter_months_map.get(p.quarter, 12) <= quarter_months]
-            else:
-                # For full year: incremental indicators use Q4 only
+                in_period = [p for p in indicator_perfs if quarter_months_map.get(p.quarter, 12) <= quarter_months]
                 if plan.indicator.is_incremental:
-                    filtered_perfs = [p for p in indicator_perfs if p.quarter == 4]
+                    # Last non-null quarter within the period
+                    filtered_perfs = []
+                    for q in sorted({p.quarter for p in in_period}, reverse=True):
+                        candidates = [p for p in in_period if p.quarter == q and p.value is not None]
+                        if candidates:
+                            filtered_perfs = candidates
+                            break
                 else:
-                    filtered_perfs = indicator_perfs
+                    filtered_perfs = in_period
+            else:
+                # For full year: incremental indicators use last non-null quarter
+                if plan.indicator.is_incremental:
+                    filtered_perfs = []
+                    for q in range(4, 0, -1):
+                        candidates = [p for p in indicator_perfs if p.quarter == q and p.value is not None]
+                        if candidates:
+                            filtered_perfs = candidates
+                            break
+                else:
+                    filtered_perfs = list(indicator_perfs)
                 
             is_na_target = (plan.target is None or plan.target == '' or plan.target == 'N/A')
             target = 0
@@ -808,11 +842,21 @@ class IndicatorPerformanceView(APIView):
                     if quarter_months:
                         try:
                             breakdown = breakdowns_qs.get(plan_id=plan.id)
-                            qt = 0
-                            if quarter_months >= 3: qt += float(breakdown.q1 or 0)
-                            if quarter_months >= 6: qt += float(breakdown.q2 or 0)
-                            if quarter_months >= 9: qt += float(breakdown.q3 or 0)
-                            if quarter_months >= 12: qt += float(breakdown.q4 or 0)
+                            quarter_months_map = {1: 3, 2: 6, 3: 9, 4: 12}
+                            in_period_quarters = [q for q in [1, 2, 3, 4] if quarter_months_map[q] <= quarter_months]
+                            if plan.indicator.is_incremental:
+                                qt = 0
+                                for q in sorted(in_period_quarters, reverse=True):
+                                    v = getattr(breakdown, f'q{q}', None)
+                                    if v is not None:
+                                        qt = float(v)
+                                        break
+                            else:
+                                qt = 0
+                                if quarter_months >= 3: qt += float(breakdown.q1 or 0)
+                                if quarter_months >= 6: qt += float(breakdown.q2 or 0)
+                                if quarter_months >= 9: qt += float(breakdown.q3 or 0)
+                                if quarter_months >= 12: qt += float(breakdown.q4 or 0)
                             target = qt
                         except QuarterlyBreakdown.DoesNotExist:
                             target = (target * quarter_months) / 12
@@ -996,10 +1040,13 @@ class IndicatorDetailView(APIView):
                     plan_id=plan.id,
                     status__in=[PerformanceStatus.APPROVED, PerformanceStatus.VALIDATED, PerformanceStatus.FINAL_APPROVED]
                 )
-                # For incremental indicators, full-year performance = Q4 value only
                 if indicator.is_incremental:
-                    q4_perf = perfs.filter(quarter=4).first()
-                    achieved = float(q4_perf.value) if q4_perf and q4_perf.value is not None and str(q4_perf.value).upper() != 'N/A' else 0
+                    achieved = 0
+                    for q in range(4, 0, -1):
+                        p = perfs.filter(quarter=q).first()
+                        if p and p.value is not None and str(p.value).upper() != 'N/A':
+                            achieved = float(p.value)
+                            break
                 else:
                     achieved = sum(float(p.value) for p in perfs if p.value is not None and str(p.value).upper() != 'N/A')
                 pct = (achieved / target * 100) if target > 0 else None
@@ -1154,10 +1201,24 @@ class DepartmentDashboardView(APIView):
 
             if quarter_months:
                 qm_map = {1: 3, 2: 6, 3: 9, 4: 12}
-                filtered_perfs = [p for p in indicator_perfs if qm_map.get(p.quarter, 12) <= quarter_months]
+                in_period = [p for p in indicator_perfs if qm_map.get(p.quarter, 12) <= quarter_months]
+                if getattr(indicator, 'is_incremental', False):
+                    filtered_perfs = []
+                    for q in sorted({p.quarter for p in in_period}, reverse=True):
+                        candidates = [p for p in in_period if p.quarter == q and p.value is not None]
+                        if candidates:
+                            filtered_perfs = candidates
+                            break
+                else:
+                    filtered_perfs = in_period
             else:
                 if getattr(indicator, 'is_incremental', False):
-                    filtered_perfs = [p for p in indicator_perfs if p.quarter == 4]
+                    filtered_perfs = []
+                    for q in range(4, 0, -1):
+                        candidates = [p for p in indicator_perfs if p.quarter == q and p.value is not None]
+                        if candidates:
+                            filtered_perfs = candidates
+                            break
                 else:
                     filtered_perfs = indicator_perfs
 
@@ -1169,11 +1230,21 @@ class DepartmentDashboardView(APIView):
                     if quarter_months:
                         bd = bds_by_plan.get(plan.id)
                         if bd:
-                            qt = 0
-                            if quarter_months >= 3: qt += float(bd.q1 or 0)
-                            if quarter_months >= 6: qt += float(bd.q2 or 0)
-                            if quarter_months >= 9: qt += float(bd.q3 or 0)
-                            if quarter_months >= 12: qt += float(bd.q4 or 0)
+                            qm_map = {1: 3, 2: 6, 3: 9, 4: 12}
+                            in_period_quarters = [q for q in [1, 2, 3, 4] if qm_map[q] <= quarter_months]
+                            if getattr(indicator, 'is_incremental', False):
+                                qt = 0
+                                for q in sorted(in_period_quarters, reverse=True):
+                                    v = getattr(bd, f'q{q}', None)
+                                    if v is not None:
+                                        qt = float(v)
+                                        break
+                            else:
+                                qt = 0
+                                if quarter_months >= 3: qt += float(bd.q1 or 0)
+                                if quarter_months >= 6: qt += float(bd.q2 or 0)
+                                if quarter_months >= 9: qt += float(bd.q3 or 0)
+                                if quarter_months >= 12: qt += float(bd.q4 or 0)
                             target = qt
                         else:
                             target = (target * quarter_months) / 12
