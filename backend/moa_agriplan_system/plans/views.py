@@ -1404,20 +1404,31 @@ def excel_export(request):
 
     # ── Recursive tree builder — ordered by display_order ────────────────────
     def build_node(group):
-        child_nodes = [
-            build_node(c)
-            for c in group.children.all()
+        child_groups = list(
+            group.children.all()
             .order_by(_F('display_order').asc(nulls_last=True), 'name')
-        ]
+        )
         ind_list = list(
             group.indicators
             .order_by(_F('display_order').asc(nulls_last=True), 'name')
         )
-        ind_nodes = [
-            {'type': 'indicator', 'name': ind.name, 'is_label': False,
-             'unit': ind.get_effective_unit() or '', 'vals': ind_vals(ind)}
-            for ind in ind_list
-        ]
+
+        child_nodes = []
+        for c in child_groups:
+            node = build_node(c)
+            node['_order'] = c.display_order if c.display_order is not None else 999999
+            child_nodes.append(node)
+
+        ind_nodes = []
+        for ind in ind_list:
+            ind_nodes.append({
+                'type': 'indicator', 'name': ind.name, 'is_label': False,
+                'unit': ind.get_effective_unit() or '', 'vals': ind_vals(ind),
+                '_order': ind.display_order if ind.display_order is not None else 999999,
+            })
+
+        # Merge sub-groups and indicators into one list respecting display_order
+        all_children = sorted(child_nodes + ind_nodes, key=lambda x: (x['_order'], x['name']))
 
         grp = {'annual_target': None, 'qx_plan': None, 'qx_perf': None,
                'cum_plan': None, 'cum_perf': None, 'pct': None}
@@ -1439,7 +1450,7 @@ def excel_export(request):
             'type': 'group', 'name': group.name, 'is_label': group.is_label,
             'unit': group.get_inherited_unit(), 'grp': grp,
             'status': group.status,
-            'children': child_nodes, 'indicators': ind_nodes,
+            'children': all_children,  # unified list — sub-groups and indicators interleaved by display_order
         }
 
     # ── Flatten tree — each group coloured by its own status only ────────────
@@ -1448,8 +1459,7 @@ def excel_export(request):
             node_status = n.get('status') if n['type'] == 'group' else None
             out.append({**n, 'level': level, 'row_status': node_status})
             if n['type'] == 'group':
-                flatten(n.get('children',   []), level + 1, out)
-                flatten(n.get('indicators', []), level + 1, out)
+                flatten(n.get('children', []), level + 1, out)
 
     # ── Root groups ordered strictly by display_order ─────────────────────────
     root_groups = (
@@ -1494,7 +1504,7 @@ def excel_export(request):
 
     headers    = [
         'የቁልፍ አፈፃፀም አመልካቾች', 'መለኪያ', f'{et_year} ዕቅድ',
-        f' የ{quarter_num}ኛ ሩብ ዓመት ዒላማ', f' የQ{quarter_num}ኛ ሩብ ዓመት አፈፃፀም',
+        f' የ{quarter_num}ኛ ሩብ ዓመት ዒላማ', f' የ{quarter_num}ኛ ሩብ ዓመት አፈፃፀም',
         f' የ{months}ወር ዒላማ', f' የ{months} ወር አፈፃፀም',
         f'የ{months} ወር አፈፃፀም በመቶኛ',
     ]
@@ -1548,7 +1558,8 @@ def excel_export(request):
                 if fr.get('is_label'):
                     write_data_row(
                         [name, fr.get('unit', ''), None, None, None, None, None, None],
-                        _label_font, _label_fill,
+                        Font(bold=True, color=s_txt if rs else '000000', size=10),
+                        s_fill if rs else _label_fill,
                     )
                 else:
                     grp_v = fr.get('grp', {})

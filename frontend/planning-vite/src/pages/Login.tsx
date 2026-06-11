@@ -142,7 +142,7 @@ export default function Login() {
               </p>
             </div>
 
-            {/* Demo Credentials Section */}
+            {/* Demo Credentials Section
             <div className="px-8 pt-6">
               <div className="mb-4">
                 <p className="text-xs text-gray-500 mb-2">Quick test (demo credentials):</p>
@@ -170,7 +170,7 @@ export default function Login() {
                   </button>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Form Content */}
             <div className="px-8 py-6">
