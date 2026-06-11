@@ -1580,14 +1580,14 @@ def excel_export(request):
                     Font(bold=True, color='000000', size=10), s_fill,
                 )
 
-    # ── Write all root groups strictly in display_order sequence ─────────────
+    # ── Collect every row into one flat list, sort globally by display_order ────
+    all_flat = []
     for grp in root_groups:
         node = build_node(grp)
-        flat = []
-        flatten([node], 0, flat)
-        write_flat_rows(flat)
+        node['_order'] = grp.display_order if grp.display_order is not None else 999999
+        flatten([node], 0, all_flat)
 
-    # ── Ungrouped indicators (no sector/dept headers) ─────────────────────────
+    # Ungrouped indicators merged into the same global list
     ungrouped_inds = list(
         Indicator.objects
         .filter(groups__isnull=True)
@@ -1595,13 +1595,16 @@ def excel_export(request):
     )
     for ind in ungrouped_inds:
         v = ind_vals(ind)
-        write_data_row(
-            [ind.name, v['unit'],
-             v.get('annual_target'), v.get('qx_plan'),
-             v.get('qx_perf'),       v.get('cum_plan'),
-             v.get('cum_perf'),       v.get('pct')],
-            _data_font, _no_status_fill,
-        )
+        all_flat.append({
+            'type': 'indicator', 'name': ind.name, 'is_label': False,
+            'unit': v['unit'], 'vals': v,
+            'level': 0, 'row_status': None,
+            '_order': ind.display_order if ind.display_order is not None else 999999,
+        })
+
+    # display_order is the single source of truth — sort everything once
+    all_flat.sort(key=lambda x: (x.get('_order', 999999), x['name']))
+    write_flat_rows(all_flat)
 
     # Freeze header row
     ws.freeze_panes = ws['A2']
