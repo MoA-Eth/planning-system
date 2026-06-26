@@ -79,6 +79,9 @@ import PrivacyPolicy from './pages/PrivacyPolicy'
 
 
 import { useAuth } from './context/AuthContext'
+import BudgetDashboard from './pages/BudgetDashboard';
+import BudgetTrends from './pages/BudgetTrends';
+import BudgetCOA from './pages/BudgetCOA';
 
 
 
@@ -523,12 +526,44 @@ function App() {
             </DashboardLayout>
 
           </StateMinisterRoute>
+         }
 
+        
+      />
+      <Route
+        path="/budget-dashboard"
+        element={
+          <MinisterRoute>
+            <DashboardLayout>
+              <BudgetDashboard />
+            </DashboardLayout>
+          </MinisterRoute>
         }
-
       />
 
       <Route
+        path="/budget-trends"
+        element={
+          <MinisterRoute>
+            <DashboardLayout>
+              <BudgetTrends />
+            </DashboardLayout>
+          </MinisterRoute>
+        }
+      />
+
+      <Route
+        path="/budget-coa"
+        element={
+          <MinisterRoute>
+            <DashboardLayout>
+              <BudgetCOA />
+            </DashboardLayout>
+          </MinisterRoute>
+        }
+      />
+
+    <Route
 
         path="/overall-dashboard"
 

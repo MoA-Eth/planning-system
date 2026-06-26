@@ -544,7 +544,26 @@ const MenuIcon = ({ name, active }: { name: string; active?: boolean }) => {
 
       );
 
+    case 'Budget Dashboard':
+      return (
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4 4h16v2H4V4zm0 5h16v2H4V9zm0 5h16v2H4v-2zm0 5h10v2H4v-2z"/>
+        </svg>
+      );
 
+    case 'Budget Trends':
+      return (
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M3.5 18.5l6-6 4 4L22 6.92 20.59 5.5l-7.09 8-4-4-8 8z"/>
+        </svg>
+      );
+
+    case 'COA Analysis':
+      return (
+        <svg className={`w-[22px] h-[22px] ${color}`} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+        </svg>
+      );
 
     default:
 
@@ -801,6 +820,10 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
       { label: 'Documents', to: '/documents' },
+            
+      // { label: 'Budget Dashboard', to: '/budget-dashboard' },
+      // { label: 'Budget Trends', to: '/budget-trends' },
+      // { label: 'COA Analysis', to: '/budget-coa' },
 
 
 
@@ -869,6 +892,9 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
 
 
       { label: 'Detail Analysis', to: '/detail-analysis' },
+      { label: 'Budget Dashboard', to: '/budget-dashboard' },
+      { label: 'Budget Trends', to: '/budget-trends' },
+      { label: 'COA Analysis', to: '/budget-coa' },
 
 
 
