@@ -5,24 +5,30 @@ const BUDGET_TOKEN = '70068850259899ffd56e7cb9d74299f70d43e426';
 
 interface DashboardData {
   fiscal_years: string[];
-  selected_year: string;
-  summary: {
-    total_approved: number;
+  kpi: {
     total_adjusted: number;
     total_actual: number;
+    balance: number;
+    over_budget_count: number;
     utilization_pct: number;
   };
-  by_fund_source: Array<{
-    fund_source: string;
-    approved: number;
+  smo_rows: Array<{
+    id: number;
+    name: string;
     adjusted: number;
     actual: number;
+    over_under: number;
+    pct: number;
   }>;
-  by_budget_type: Array<{
-    budget_type: string;
-    approved: number;
+  program_rows: Array<{
+    id: number;
+    code: string;
+    name: string;
+    smo_id: number;
     adjusted: number;
     actual: number;
+    over_under: number;
+    pct: number;
   }>;
 }
 
@@ -56,9 +62,10 @@ export default function BudgetDashboard() {
       }
 
       const result = await response.json();
+      console.log('Budget API Response:', result);
       setData(result);
-      if (!selectedYear && result.selected_year) {
-        setSelectedYear(result.selected_year);
+      if (!selectedYear && result.fiscal_years?.length > 0) {
+        setSelectedYear(result.fiscal_years[0]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
@@ -106,6 +113,11 @@ export default function BudgetDashboard() {
 
   if (!data) return null;
 
+  // Safe access with fallbacks
+  const kpi = data.kpi || {};
+  const smoRows = data.smo_rows || [];
+  const programRows = data.program_rows || [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -126,51 +138,57 @@ export default function BudgetDashboard() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Total Approved</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">
-            ETB {fmtShort(data.summary.total_approved)}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Total Adjusted</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
-            ETB {fmtShort(data.summary.total_adjusted)}
+            ETB {fmtShort(kpi.total_adjusted || 0)}
           </p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Total Actual</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
-            ETB {fmtShort(data.summary.total_actual)}
+            ETB {fmtShort(kpi.total_actual || 0)}
+          </p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-5">
+          <p className="text-sm font-medium text-gray-500">Balance</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">
+            ETB {fmtShort(kpi.balance || 0)}
           </p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Utilization</p>
           <p className="text-2xl font-bold text-emerald-600 mt-1">
-            {data.summary.utilization_pct}%
+            {kpi.utilization_pct || 0}%
           </p>
         </div>
       </div>
 
-      {/* By Fund Source */}
+      {/* By State Minister Office */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">By Fund Source</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">By State Minister Office</h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Fund Source</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Approved</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Office Name</th>
                 <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Adjusted</th>
                 <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Actual</th>
+                <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Balance</th>
+                <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Utilization</th>
               </tr>
             </thead>
             <tbody>
-              {data.by_fund_source.map((item, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm text-gray-900">{item.fund_source}</td>
-                  <td className="py-3 px-4 text-sm text-gray-900 text-right">{fmt(item.approved)}</td>
+              {smoRows.map((item) => (
+                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-sm text-gray-900">{item.name}</td>
                   <td className="py-3 px-4 text-sm text-gray-900 text-right">{fmt(item.adjusted)}</td>
                   <td className="py-3 px-4 text-sm text-gray-900 text-right">{fmt(item.actual)}</td>
+                  <td className={`py-3 px-4 text-sm text-right font-medium ${
+                    item.over_under >= 0 ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
+                    {fmt(item.over_under)}
+                  </td>
+                  <td className="py-3 px-4 text-sm text-emerald-600 text-right font-medium">{item.pct}%</td>
                 </tr>
               ))}
             </tbody>
@@ -178,26 +196,34 @@ export default function BudgetDashboard() {
         </div>
       </div>
 
-      {/* By Budget Type */}
+      {/* By Program */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">By Budget Type</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">By Program</h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Budget Type</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Approved</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Code</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Program Name</th>
                 <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Adjusted</th>
                 <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Actual</th>
+                <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Balance</th>
+                <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Utilization</th>
               </tr>
             </thead>
             <tbody>
-              {data.by_budget_type.map((item, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm text-gray-900">{item.budget_type}</td>
-                  <td className="py-3 px-4 text-sm text-gray-900 text-right">{fmt(item.approved)}</td>
+              {programRows.map((item) => (
+                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-sm font-mono text-gray-900">{item.code}</td>
+                  <td className="py-3 px-4 text-sm text-gray-900">{item.name}</td>
                   <td className="py-3 px-4 text-sm text-gray-900 text-right">{fmt(item.adjusted)}</td>
                   <td className="py-3 px-4 text-sm text-gray-900 text-right">{fmt(item.actual)}</td>
+                  <td className={`py-3 px-4 text-sm text-right font-medium ${
+                    item.over_under >= 0 ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
+                    {fmt(item.over_under)}
+                  </td>
+                  <td className="py-3 px-4 text-sm text-emerald-600 text-right font-medium">{item.pct}%</td>
                 </tr>
               ))}
             </tbody>
