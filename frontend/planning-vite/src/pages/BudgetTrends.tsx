@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const BUDGET_API = 'http://10.10.20.123/api';
+const BUDGET_API = 'https://budget.moa.gov.et/api';
 const BUDGET_TOKEN = '70068850259899ffd56e7cb9d74299f70d43e426';
 
 interface YearTrendsData {
