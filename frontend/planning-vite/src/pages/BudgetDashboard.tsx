@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -13,7 +13,17 @@ const LEVEL_STYLE = [
   'bg-blue-700 text-white',
   'bg-indigo-50 text-indigo-900',
   'bg-gray-50 text-gray-800',
+  'bg-slate-50 text-slate-500',
 ];
+
+interface COAItem {
+  id: number;
+  code: string;
+  name: string;
+  adjusted_budget: number;
+  actual_expenditure: number;
+  balance: number;
+}
 
 interface DashboardData {
   fiscal_years: string[];
@@ -83,9 +93,19 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 function DrillRow({ row, isExpanded, onToggle }: any) {
-  const { level, label, adjusted, actual, over_under, pct, hasChildren } = row;
+  const { level, label, adjusted, actual, over_under, pct, hasChildren, isPlaceholder } = row;
   const style = LEVEL_STYLE[Math.min(level, LEVEL_STYLE.length - 1)];
   const indent = level * 20;
+
+  if (isPlaceholder) {
+    return (
+      <tr className={`border-b border-gray-100 ${style}`}>
+        <td className="px-3 py-2" style={{ paddingLeft: indent + 28 }} colSpan={5}>
+          <span className="text-xs italic opacity-40">{label}</span>
+        </td>
+      </tr>
+    );
+  }
   const fontCls = level === 0 ? 'font-bold text-sm' : level <= 1 ? 'font-semibold text-sm' : 'text-sm';
   const isNeg = over_under < 0;
   
@@ -148,6 +168,8 @@ export default function BudgetDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [expanded, setExpanded] = useState(new Set(['ministry']));
+  const [coaCache, setCoaCache] = useState<Record<number, COAItem[]>>({});
+  const fetchedActIds = useRef<Set<number>>(new Set());
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -181,6 +203,39 @@ export default function BudgetDashboard() {
   }, [selectedYear]);
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  useEffect(() => {
+    const toFetch: number[] = [];
+    for (const key of expanded) {
+      if (key.startsWith('act-')) {
+        const actId = parseInt(key.replace('act-', ''), 10);
+        if (!fetchedActIds.current.has(actId)) {
+          toFetch.push(actId);
+          fetchedActIds.current.add(actId);
+        }
+      }
+    }
+    if (toFetch.length === 0) return;
+    Promise.all(
+      toFetch.map(async (actId) => {
+        try {
+          const res = await fetch(`${BUDGET_API}/chart-of-accounts/?activity_id=${actId}`, {
+            headers: { 'Authorization': `Token ${BUDGET_TOKEN}`, 'Content-Type': 'application/json' }
+          });
+          const items = res.ok ? await res.json() : [];
+          return { actId, items: Array.isArray(items) ? items : [] };
+        } catch {
+          return { actId, items: [] };
+        }
+      })
+    ).then((results) => {
+      setCoaCache((prev) => {
+        const next = { ...prev };
+        for (const { actId, items } of results) next[actId] = items;
+        return next;
+      });
+    });
+  }, [expanded]);
 
   const toggle = useCallback((key: string) => {
     setExpanded((prev) => {
@@ -239,17 +294,38 @@ export default function BudgetDashboard() {
 
         if (!expanded.has(progKey)) continue;
         for (const act of acts) {
+          const actKey = `act-${act.id}`;
+          const actCoa = coaCache[act.id];
           rows.push({
-            key: `act-${act.id}`, level: 3,
+            key: actKey, level: 3,
             label: `${act.code} — ${act.name}`,
-            ...act, hasChildren: false,
+            ...act, hasChildren: true,
           });
+          if (!expanded.has(actKey)) continue;
+          if (actCoa === undefined) {
+            rows.push({ key: `coa-loading-${act.id}`, level: 4, label: 'Loading COA data…', adjusted: 0, actual: 0, over_under: 0, pct: 0, hasChildren: false, isPlaceholder: true });
+          } else if (actCoa.length === 0) {
+            rows.push({ key: `coa-empty-${act.id}`, level: 4, label: 'No COA items linked to this activity', adjusted: 0, actual: 0, over_under: 0, pct: 0, hasChildren: false, isPlaceholder: true });
+          } else {
+            for (const coa of actCoa) {
+              const coaPct = coa.adjusted_budget > 0 ? Math.round(coa.actual_expenditure / coa.adjusted_budget * 1000) / 10 : 0;
+              rows.push({
+                key: `coa-${coa.id}`, level: 4,
+                label: `${coa.code} — ${coa.name}`,
+                adjusted: coa.adjusted_budget,
+                actual: coa.actual_expenditure,
+                over_under: coa.balance,
+                pct: coaPct,
+                hasChildren: false,
+              });
+            }
+          }
         }
       }
     }
 
     return rows;
-  }, [data, expanded]);
+  }, [data, expanded, coaCache]);
 
   const { pieData, barSmoData } = useMemo(() => {
     const smo_rows = data?.smo_rows || [];
@@ -379,7 +455,7 @@ export default function BudgetDashboard() {
               <Pie
                 data={pieData} cx="50%" cy="45%"
                 outerRadius={140} dataKey="value" nameKey="name"
-                label={({ name, percent }) => `${name.split(' ')[0]}: ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) => `${(name ?? '').split(' ')[0]}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                 labelLine
               >
                 {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
