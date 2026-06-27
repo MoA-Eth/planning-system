@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -19,10 +19,13 @@ const LEVEL_STYLE = [
 interface COAItem {
   id: number;
   code: string;
-  name: string;
-  adjusted_budget: number;
-  actual_expenditure: number;
-  balance: number;
+  description: string;
+  activity_id: number | null;
+  project_id: number | null;
+  adjusted: number;
+  actual: number;
+  over_under: number;
+  pct: number;
 }
 
 interface DashboardData {
@@ -62,6 +65,7 @@ interface DashboardData {
     over_under: number;
     pct: number;
   }>;
+  coa_rows?: COAItem[];
   top_over_budget?: Array<any>;
 }
 
@@ -168,9 +172,6 @@ export default function BudgetDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [expanded, setExpanded] = useState(new Set(['ministry']));
-  const [coaCache, setCoaCache] = useState<Record<number, COAItem[]>>({});
-  const fetchedActIds = useRef<Set<number>>(new Set());
-
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -204,39 +205,6 @@ export default function BudgetDashboard() {
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
-  useEffect(() => {
-    const toFetch: number[] = [];
-    for (const key of expanded) {
-      if (key.startsWith('act-')) {
-        const actId = parseInt(key.replace('act-', ''), 10);
-        if (!fetchedActIds.current.has(actId)) {
-          toFetch.push(actId);
-          fetchedActIds.current.add(actId);
-        }
-      }
-    }
-    if (toFetch.length === 0) return;
-    Promise.all(
-      toFetch.map(async (actId) => {
-        try {
-          const res = await fetch(`${BUDGET_API}/chart-of-accounts/?activity_id=${actId}`, {
-            headers: { 'Authorization': `Token ${BUDGET_TOKEN}`, 'Content-Type': 'application/json' }
-          });
-          const items = res.ok ? await res.json() : [];
-          return { actId, items: Array.isArray(items) ? items : [] };
-        } catch {
-          return { actId, items: [] };
-        }
-      })
-    ).then((results) => {
-      setCoaCache((prev) => {
-        const next = { ...prev };
-        for (const { actId, items } of results) next[actId] = items;
-        return next;
-      });
-    });
-  }, [expanded]);
-
   const toggle = useCallback((key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -263,7 +231,7 @@ export default function BudgetDashboard() {
   const drillRows = useMemo(() => {
     if (!data) return [];
     const rows: any[] = [];
-    const { kpi, smo_rows, program_rows, activity_rows = [] } = data;
+    const { kpi, smo_rows, program_rows, activity_rows = [], coa_rows = [] } = data;
 
     rows.push({
       key: 'ministry', level: 0,
@@ -295,27 +263,24 @@ export default function BudgetDashboard() {
         if (!expanded.has(progKey)) continue;
         for (const act of acts) {
           const actKey = `act-${act.id}`;
-          const actCoa = coaCache[act.id];
+          const actCoaItems = coa_rows.filter((c) => c.activity_id === act.id);
           rows.push({
             key: actKey, level: 3,
             label: `${act.code} — ${act.name}`,
-            ...act, hasChildren: true,
+            ...act, hasChildren: actCoaItems.length > 0,
           });
           if (!expanded.has(actKey)) continue;
-          if (actCoa === undefined) {
-            rows.push({ key: `coa-loading-${act.id}`, level: 4, label: 'Loading COA data…', adjusted: 0, actual: 0, over_under: 0, pct: 0, hasChildren: false, isPlaceholder: true });
-          } else if (actCoa.length === 0) {
+          if (actCoaItems.length === 0) {
             rows.push({ key: `coa-empty-${act.id}`, level: 4, label: 'No COA items linked to this activity', adjusted: 0, actual: 0, over_under: 0, pct: 0, hasChildren: false, isPlaceholder: true });
           } else {
-            for (const coa of actCoa) {
-              const coaPct = coa.adjusted_budget > 0 ? Math.round(coa.actual_expenditure / coa.adjusted_budget * 1000) / 10 : 0;
+            for (const coa of actCoaItems) {
               rows.push({
                 key: `coa-${coa.id}`, level: 4,
-                label: `${coa.code} — ${coa.name}`,
-                adjusted: coa.adjusted_budget,
-                actual: coa.actual_expenditure,
-                over_under: coa.balance,
-                pct: coaPct,
+                label: coa.description,
+                adjusted: coa.adjusted,
+                actual: coa.actual,
+                over_under: coa.over_under,
+                pct: coa.pct,
                 hasChildren: false,
               });
             }
@@ -325,7 +290,7 @@ export default function BudgetDashboard() {
     }
 
     return rows;
-  }, [data, expanded, coaCache]);
+  }, [data, expanded]);
 
   const { pieData, barSmoData } = useMemo(() => {
     const smo_rows = data?.smo_rows || [];
