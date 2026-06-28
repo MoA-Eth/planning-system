@@ -48,9 +48,7 @@ interface YearTrendsData {
 
 interface PerformanceTrend {
   year: number;
-  achievement_percentage: number;
-  total_target: number;
-  total_achieved: number;
+  ministry_performance: number | null;
 }
 
 // Extract a comparable 4-digit year key from a budget fiscal-year string (e.g. "2015/16" -> "2015")
@@ -181,22 +179,50 @@ export default function BudgetTrends() {
     }
   }, []);
 
-  const fetchPerformance = useCallback(async () => {
-    try {
-      const { data } = await api.get('/api/ministry-performance-trends/?years=5');
-      setPerfTrends(data.trends ?? []);
-    } catch {
-      // Performance data is optional; ignore if unavailable
-      setPerfTrends([]);
-    }
-  }, []);
-
-  useEffect(() => { fetchTrends(); fetchPerformance(); }, [fetchTrends, fetchPerformance]);
-
   // Merge budget utilization % and ministry achievement % over a fixed window
   // of consecutive Ethiopian fiscal years (both sources are Ethiopian: budget
   // natively, performance converted from Gregorian). Missing years show 0.
   const PERF_WINDOW_YEARS = 4;
+
+  const fetchPerformance = useCallback(async () => {
+    try {
+      // Get the 4 most recent Ethiopian years from budget data
+      const allYears = [...new Set((data?.yearly_totals ?? []).map(r => parseInt(yearKey(r.fiscal_year), 10)))];
+      if (allYears.length === 0) {
+        setPerfTrends([]);
+        return;
+      }
+      const recent = Math.max(...allYears);
+      const ethiopianYears = Array.from({ length: PERF_WINDOW_YEARS }, (_, i) => recent - (PERF_WINDOW_YEARS - 1) + i);
+
+      // Convert Ethiopian years to Gregorian for the API
+      const toGregorian = (ethYear: number) => ethYear + 7;
+      const gregorianYears = ethiopianYears.map(toGregorian);
+
+      // Call /api/indicator-performance/ for each year
+      const promises = gregorianYears.map(gYear =>
+        api.get('/api/indicator-performance/', {
+          params: { year: gYear, quarter_months: 12 }
+        }).catch(() => null) // Continue if one year fails
+      );
+
+      const results = await Promise.all(promises);
+
+      // Map results to PerformanceTrend format
+      const trends: PerformanceTrend[] = results.map((res, i) => ({
+        year: gregorianYears[i],
+        ministry_performance: res?.data?.ministry_performance ?? null
+      }));
+
+      setPerfTrends(trends);
+    } catch {
+      // Performance data is optional; ignore if unavailable
+      setPerfTrends([]);
+    }
+  }, [data]);
+
+  useEffect(() => { fetchTrends(); fetchPerformance(); }, [fetchTrends, fetchPerformance]);
+
   const perfVsUtil = useMemo(() => {
     const utilByYear = new Map<number, number>();
     (data?.yearly_totals ?? []).forEach((r) => {
@@ -206,7 +232,9 @@ export default function BudgetTrends() {
     const perfByYear = new Map<number, number>();
     perfTrends.forEach((t) => {
       const y = toEthiopianYearFromGregorian(t.year); // Gregorian -> Ethiopian
-      perfByYear.set(y, t.achievement_percentage);
+      if (t.ministry_performance !== null) {
+        perfByYear.set(y, t.ministry_performance);
+      }
     });
 
     const allYears = [...utilByYear.keys(), ...perfByYear.keys()];

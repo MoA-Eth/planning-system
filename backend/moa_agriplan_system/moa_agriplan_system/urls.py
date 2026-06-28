@@ -23,7 +23,7 @@ from django.http import HttpResponse, JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from indicators.views import SectorViewSet, DepartmentViewSet, IndicatorViewSet, IndicatorGroupViewSet, state_minister_dashboard, hierarchical_spreadsheet
-from users.views import MeView, UserViewSet, AdminStatsView, AdminTargetsBySectorView, AdminIndicatorsByDepartmentView, ActivityLogView, ChangePasswordView, MinisterDashboardView, IndicatorPerformanceView, IndicatorDetailView, DepartmentDashboardView, MinistryPerformanceTrendsView
+from users.views import MeView, UserViewSet, AdminStatsView, AdminTargetsBySectorView, AdminIndicatorsByDepartmentView, ActivityLogView, ChangePasswordView, MinisterDashboardView, IndicatorPerformanceView, IndicatorDetailView, DepartmentDashboardView
 from plans.views import (
     AnnualPlanViewSet,
     QuarterlyBreakdownViewSet,
@@ -75,7 +75,6 @@ urlpatterns = [
     path('api/indicator-performance/', IndicatorPerformanceView.as_view(), name='api-indicator-performance'),
     path('api/indicator-detail/', IndicatorDetailView.as_view(), name='api-indicator-detail'),
     path('api/department-dashboard/', DepartmentDashboardView.as_view(), name='api-department-dashboard'),
-    path('api/ministry-performance-trends/', MinistryPerformanceTrendsView.as_view(), name='api-ministry-performance-trends'),
     path('api/submission-windows/status/', submission_window_status, name='api-submission-window-status'),
     path('api/reviews/summary/', minister_review_summary, name='api-minister-review-summary'),
     path('api/reviews/submit-to-strategic/', submit_to_strategic, name='api-submit-to-strategic'),
