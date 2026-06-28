@@ -256,7 +256,7 @@ export default function BudgetCOA() {
         <>
           {/* Summary table */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+            <div className="px-5 py-3 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <h2 className="font-semibold text-gray-900">
                   {selectedCoa.code} — {selectedCoa.name}
@@ -266,7 +266,7 @@ export default function BudgetCOA() {
                 </p>
               </div>
               {tableRows.length > 0 && (
-                <div className="flex gap-6 text-xs text-gray-500">
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
                   <span>
                     Total Adjusted:{' '}
                     <span className="font-semibold text-gray-800">
