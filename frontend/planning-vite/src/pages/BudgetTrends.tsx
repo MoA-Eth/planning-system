@@ -5,8 +5,6 @@ import {
   ResponsiveContainer, Cell,
 } from 'recharts';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import api from '../lib/api';
-import { toEthiopianYearFromGregorian } from '../lib/ethiopian';
 
 const BUDGET_API = 'https://budget.moa.gov.et/api';
 const BUDGET_TOKEN = '70068850259899ffd56e7cb9d74299f70d43e426';
@@ -44,17 +42,6 @@ interface YearTrendsData {
   yoy_growth?: Array<{ fiscal_year: string; budget_growth: number; expenditure_growth: number }>;
   program_trends?: Array<Record<string, number | string>>;
   top_program_names?: string[];
-}
-
-interface PerformanceTrend {
-  year: number;
-  ministry_performance: number | null;
-}
-
-// Extract a comparable 4-digit year key from a budget fiscal-year string (e.g. "2015/16" -> "2015")
-function yearKey(fiscalYear: string | number) {
-  const m = String(fiscalYear).match(/\d{4}/);
-  return m ? m[0] : String(fiscalYear);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -156,7 +143,6 @@ function CustomTooltip({ active, payload, label }: any) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function BudgetTrends() {
   const [data, setData] = useState<YearTrendsData | null>(null);
-  const [perfTrends, setPerfTrends] = useState<PerformanceTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -179,80 +165,7 @@ export default function BudgetTrends() {
     }
   }, []);
 
-  // Merge budget utilization % and ministry achievement % over a fixed window
-  // of consecutive Ethiopian fiscal years (both sources are Ethiopian: budget
-  // natively, performance converted from Gregorian). Missing years show 0.
-  const PERF_WINDOW_YEARS = 4;
-
-  const fetchPerformance = useCallback(async () => {
-    try {
-      // Get the 4 most recent Ethiopian years from budget data
-      const allYears = [...new Set((data?.yearly_totals ?? []).map(r => parseInt(yearKey(r.fiscal_year), 10)))];
-      if (allYears.length === 0) {
-        setPerfTrends([]);
-        return;
-      }
-      const recent = Math.max(...allYears);
-      const ethiopianYears = Array.from({ length: PERF_WINDOW_YEARS }, (_, i) => recent - (PERF_WINDOW_YEARS - 1) + i);
-
-      // Convert Ethiopian years to Gregorian for the API
-      const toGregorian = (ethYear: number) => ethYear + 7;
-      const gregorianYears = ethiopianYears.map(toGregorian);
-
-      // Call /api/indicator-performance/ for each year
-      const promises = gregorianYears.map(gYear =>
-        api.get('/api/indicator-performance/', {
-          params: { year: gYear, quarter_months: 12 }
-        }).catch(() => null) // Continue if one year fails
-      );
-
-      const results = await Promise.all(promises);
-
-      // Map results to PerformanceTrend format
-      const trends: PerformanceTrend[] = results.map((res, i) => ({
-        year: gregorianYears[i],
-        ministry_performance: res?.data?.ministry_performance ?? null
-      }));
-
-      setPerfTrends(trends);
-    } catch {
-      // Performance data is optional; ignore if unavailable
-      setPerfTrends([]);
-    }
-  }, [data]);
-
-  useEffect(() => { fetchTrends(); fetchPerformance(); }, [fetchTrends, fetchPerformance]);
-
-  const perfVsUtil = useMemo(() => {
-    const utilByYear = new Map<number, number>();
-    (data?.yearly_totals ?? []).forEach((r) => {
-      const y = parseInt(yearKey(r.fiscal_year), 10);
-      if (!Number.isNaN(y)) utilByYear.set(y, r.utilization_pct);
-    });
-    const perfByYear = new Map<number, number>();
-    perfTrends.forEach((t) => {
-      const y = toEthiopianYearFromGregorian(t.year); // Gregorian -> Ethiopian
-      if (t.ministry_performance !== null) {
-        perfByYear.set(y, t.ministry_performance);
-      }
-    });
-
-    const allYears = [...utilByYear.keys(), ...perfByYear.keys()];
-    if (allYears.length === 0) return [];
-    const recent = Math.max(...allYears);
-
-    const rows = [];
-    for (let y = recent - (PERF_WINDOW_YEARS - 1); y <= recent; y++) {
-      rows.push({
-        year: String(y),
-        'Budget Utilization %': utilByYear.get(y) ?? 0,
-        'Ministry Performance %': perfByYear.get(y) ?? 0,
-      });
-    }
-    return rows;
-  }, [data, perfTrends]);
-
-  const hasPerfComparison = perfTrends.length > 0 && perfVsUtil.length > 0;
+  useEffect(() => { fetchTrends(); }, [fetchTrends]);
 
   const summary = useMemo(() => {
     if (!data?.yearly_totals?.length) return null;
@@ -388,27 +301,6 @@ export default function BudgetTrends() {
               </div>
             )}
           </ChartCard>
-
-          {/* Ministry Performance vs Budget Utilization */}
-          {hasPerfComparison && (
-            <ChartCard
-              title="Ministry Performance vs Budget Utilization"
-              subtitle={`Indicator achievement % vs budget utilization % — last ${PERF_WINDOW_YEARS} fiscal years (Ethiopian); missing years show 0`}
-            >
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart data={perfVsUtil} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 11 }} unit="%" domain={[0, 'auto']} width={50} />
-                  <Tooltip formatter={(v: any) => (v == null ? ['—'] : [`${v}%`])} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <ReferenceLine y={100} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '100%', position: 'right', fontSize: 10, fill: '#ef4444' }} />
-                  <Bar dataKey="Ministry Performance %" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Budget Utilization %" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-          )}
 
           {/* Charts 3 & 4: Fund Source + Budget Type */}
           {(data?.fund_source_data?.length || data?.budget_type_data?.length) ? (

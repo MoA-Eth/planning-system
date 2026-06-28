@@ -1337,3 +1337,85 @@ class DepartmentDashboardView(APIView):
             'groups': groups_result,
             'ungrouped_indicators': ungrouped,
         })
+
+
+class MinistryPerformanceTrendsView(APIView):
+    """
+    Ministry-wide indicator achievement percentage per fiscal year, across
+    multiple years, for trend charts (e.g. performance vs budget utilization).
+
+    Query params:
+      - years (optional, default 5): number of most-recent years to include.
+
+    Response:
+      {
+        "trends": [
+          {"year": 2017, "achievement_percentage": 82.4,
+           "total_target": 1000.0, "total_achieved": 824.0},
+          ...
+        ]
+      }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            num_years = int(request.query_params.get('years', 5))
+        except (TypeError, ValueError):
+            num_years = 5
+        num_years = max(1, min(num_years, 20))
+
+        # Distinct years that have annual plans, most recent first
+        all_years = list(
+            AnnualPlan.objects.order_by('-year')
+            .values_list('year', flat=True)
+            .distinct()
+        )
+        selected_years = sorted(all_years[:num_years])
+
+        approved_statuses = [
+            PerformanceStatus.APPROVED,
+            PerformanceStatus.VALIDATED,
+            PerformanceStatus.FINAL_APPROVED,
+        ]
+
+        trends = []
+        for year in selected_years:
+            plans_qs = AnnualPlan.objects.select_related('indicator').filter(year=year)
+            perfs_qs = QuarterlyPerformance.objects.select_related('plan__indicator').filter(
+                plan__year=year,
+                status__in=approved_statuses,
+            )
+
+            total_target = sum(float(p.target) for p in plans_qs if p.target is not None)
+
+            # For incremental indicators keep only the last non-null quarter per plan
+            last_incremental = {}
+            for p in perfs_qs:
+                if p.plan.indicator.is_incremental and p.value is not None:
+                    prev = last_incremental.get(p.plan_id)
+                    if prev is None or p.quarter > prev.quarter:
+                        last_incremental[p.plan_id] = p
+            filtered_perfs = [
+                p for p in perfs_qs
+                if not p.plan.indicator.is_incremental
+                or last_incremental.get(p.plan_id) is p
+            ]
+
+            total_achieved = sum(
+                float(p.value) for p in filtered_perfs if p.value is not None
+            )
+
+            achievement_percentage = (
+                round(total_achieved / total_target * 100, 1)
+                if total_target > 0 else 0
+            )
+
+            trends.append({
+                'year': year,
+                'achievement_percentage': achievement_percentage,
+                'total_target': total_target,
+                'total_achieved': total_achieved,
+            })
+
+        return Response({'trends': trends})
