@@ -574,10 +574,10 @@ export default function MinisterView() {
 
       {/* 2. Filter Bar — labeled dropdowns */}
       <div className="max-w-5xl mx-auto px-4 mt-4">
-        <div className="flex flex-wrap items-start justify-end gap-4">
+        <div className="flex flex-wrap items-start justify-end gap-3 sm:gap-4">
           {/* Row 1: Data type + Year */}
-          <div className="flex gap-4">
-            <div>
+          <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">
+            <div className="flex-1 sm:flex-none">
               <label className="block text-xs text-gray-400 mb-1">Select data type</label>
               <div className="relative">
                 <QuarterFilter
@@ -589,7 +589,7 @@ export default function MinisterView() {
                 />
               </div>
             </div>
-            <div>
+            <div className="flex-1 sm:flex-none">
               <label className="block text-xs text-gray-400 mb-1">Select time</label>
               <YearFilter
                 value={year}
@@ -602,8 +602,8 @@ export default function MinisterView() {
           </div>
 
           {/* Row 2: Organization + Search */}
-          <div className="flex gap-4">
-            <div className="w-64">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+            <div className="w-full sm:w-64">
               <label className="block text-xs text-gray-400 mb-1">Select Department</label>
               <select
                 value={filterDeptId ?? ''}
@@ -616,7 +616,7 @@ export default function MinisterView() {
                 ))}
               </select>
             </div>
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <label className="block text-xs text-gray-400 mb-1">Search indicators</label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -636,7 +636,7 @@ export default function MinisterView() {
       {/* Performance Range Filter Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-blue-400">Indicator's Performances</h2>
+          <h2 className="text-lg sm:text-2xl font-bold text-blue-400">Indicator's Performances</h2>
           <span className="text-sm italic text-gray-400">Click a card to see details</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -658,7 +658,7 @@ export default function MinisterView() {
                   className="absolute left-0 top-3 bottom-3 w-1.5 rounded-r-full"
                   style={{ backgroundColor: item.color }}
                 />
-                <div className="text-4xl font-bold text-gray-800 mb-1">{count}</div>
+                <div className="text-2xl sm:text-4xl font-bold text-gray-800 mb-1">{count}</div>
                 <div className="text-sm text-gray-500 font-medium">{item.label}</div>
                 <div className="text-xs text-gray-400 mt-1">{item.range}</div>
               </button>
@@ -698,11 +698,11 @@ export default function MinisterView() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Indicator</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Target</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Achieved</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Performance</th>
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Indicator</th>
+                      <th className="px-2 sm:px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Department</th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Target</th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Achieved</th>
+                      <th className="px-2 sm:px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Performance</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
@@ -712,14 +712,14 @@ export default function MinisterView() {
                         onClick={() => setModalIndicatorId(ind.id)}
                         className="hover:bg-emerald-50/50 cursor-pointer transition-colors"
                       >
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-xs">
+                        <td className="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900 max-w-xs">
                           <span className="hover:text-emerald-700 transition-colors">{ind.name}</span>
                           <div className="text-xs text-gray-400 mt-0.5">{ind.unit}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{ind.departmentName}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 text-right tabular-nums">{formatValue(ind.target)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 text-right tabular-nums">{formatValue(ind.achieved)}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-2 sm:px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">{ind.departmentName}</td>
+                        <td className="px-2 sm:px-4 py-3 text-sm text-gray-600 text-right tabular-nums">{formatValue(ind.target)}</td>
+                        <td className="px-2 sm:px-4 py-3 text-sm text-gray-600 text-right tabular-nums">{formatValue(ind.achieved)}</td>
+                        <td className="px-2 sm:px-4 py-3 text-right">
                           <span
                             className="inline-block px-2.5 py-1 rounded text-xs font-bold text-white"
                             style={{ backgroundColor: getPerformanceColor(ind.performance_percentage) }}
@@ -937,10 +937,10 @@ export default function MinisterView() {
       {/* 6. Indicator Detail Modal */}
       {modalIndicatorId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden mx-2 sm:mx-auto">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h2 className="text-xl font-bold text-gray-900">Indicator Analysis</h2>
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <h2 className="text-base sm:text-xl font-bold text-gray-900">Indicator Analysis</h2>
               <div className="flex items-center gap-2">
                 <button
                   onClick={exportModalToPng}
@@ -965,17 +965,17 @@ export default function MinisterView() {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {modalLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600"></div>
                 </div>
               ) : modalData ? (
-                <div className="flex flex-col lg:flex-row gap-8">
+                <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
                   {/* Left Side - Basic Info */}
-                  <div className="w-full lg:w-1/3 space-y-6">
+                  <div className="w-full lg:w-1/3 space-y-4 sm:space-y-6">
                     <div>
-                      <h3 className="text-2xl font-bold text-gray-900 leading-tight mb-2">
+                      <h3 className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight mb-2">
                         {modalData.indicator.name}
                       </h3>
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-50 text-blue-700 text-xs font-semibold uppercase tracking-wider mb-4">
