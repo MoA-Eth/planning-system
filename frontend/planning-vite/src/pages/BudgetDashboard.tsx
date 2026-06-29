@@ -194,7 +194,11 @@ export default function BudgetDashboard() {
       const result = await response.json();
       setData(result);
       if (!selectedYear && result.fiscal_years?.length > 0) {
-        setSelectedYear(result.fiscal_years[result.fiscal_years.length - 1]);
+        // Sort descending so the most recent year is first
+        result.fiscal_years.sort((a: string, b: string) => b.localeCompare(a));
+        setSelectedYear(result.fiscal_years[0]);
+      } else if (result.fiscal_years?.length > 0) {
+        result.fiscal_years.sort((a: string, b: string) => b.localeCompare(a));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
