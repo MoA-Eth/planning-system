@@ -10,7 +10,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { TrendingUp, Wallet, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, Wallet, AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import YearFilter from '../components/YearFilter';
 import { getCurrentEthiopianDate, toGregorianYearFromEthiopian } from '../lib/ethiopian';
@@ -102,6 +103,7 @@ export default function DetailAnalysis() {
       ? ethDate[0]
       : new Date().getFullYear() - 7;
 
+  const navigate = useNavigate();
   const [year, setYear] = useState<number>(currentYear);
   const [chartData, setChartData] = useState<YearDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -168,20 +170,29 @@ export default function DetailAnalysis() {
   const avgPerf =
     chartData.filter((d) => d.hasPerformance).length > 0
       ? chartData
-          .filter((d) => d.hasPerformance)
-          .reduce((sum, d) => sum + d.performance, 0) /
-        chartData.filter((d) => d.hasPerformance).length
+        .filter((d) => d.hasPerformance)
+        .reduce((sum, d) => sum + d.performance, 0) /
+      chartData.filter((d) => d.hasPerformance).length
       : null;
 
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Detail Analysis</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Budget utilization vs. ministry performance — 4-year comparison
-          </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/minister-view')}
+            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800"
+            title="Back to Minister View"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Detail Analysis</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Budget utilization vs. ministry performance — 4-year comparison
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <YearFilter value={year} onChange={setYear} variant="compact" className="w-40" />
@@ -210,8 +221,8 @@ export default function DetailAnalysis() {
                 ? latestWithPerf.performance >= 85
                   ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
                   : latestWithPerf.performance >= 65
-                  ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                  : 'bg-red-50 text-red-900 border border-red-200'
+                    ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                    : 'bg-red-50 text-red-900 border border-red-200'
                 : 'bg-gray-50 text-gray-700 border border-gray-200'
             }
           />
@@ -225,8 +236,8 @@ export default function DetailAnalysis() {
                 ? latestWithUtil.utilization > 100
                   ? 'bg-red-50 text-red-900 border border-red-200'
                   : latestWithUtil.utilization >= 85
-                  ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                  : 'bg-indigo-50 text-indigo-900 border border-indigo-200'
+                    ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                    : 'bg-indigo-50 text-indigo-900 border border-indigo-200'
                 : 'bg-gray-50 text-gray-700 border border-gray-200'
             }
           />
@@ -240,8 +251,8 @@ export default function DetailAnalysis() {
                 ? avgPerf >= 85
                   ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
                   : avgPerf >= 65
-                  ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                  : 'bg-red-50 text-red-900 border border-red-200'
+                    ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                    : 'bg-red-50 text-red-900 border border-red-200'
                 : 'bg-gray-50 text-gray-700 border border-gray-200'
             }
           />
@@ -348,13 +359,13 @@ export default function DetailAnalysis() {
           <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-4 text-xs text-gray-400">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#6366f1] inline-block" />
-              Budget Utilization from{' '}
-              <code className="bg-gray-100 px-1 rounded text-gray-500">budget.moa.gov.et/api</code>
+              Budget Utilization
+              {/* <code className="bg-gray-100 px-1 rounded text-gray-500">budget.moa.gov.et/api</code> */}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#10b981] inline-block" />
-              Ministry Performance from{' '}
-              <code className="bg-gray-100 px-1 rounded text-gray-500">/api/indicator-performance/</code>
+              Ministry Performance
+              {/* <code className="bg-gray-100 px-1 rounded text-gray-500">/api/indicator-performance/</code> */}
             </span>
             <span className="flex items-center gap-1.5">
               <span
