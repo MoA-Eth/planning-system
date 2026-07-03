@@ -427,7 +427,7 @@ export default function BudgetTrends() {
                     <th className="px-4 py-3 text-right">Actual Expenditure</th>
                     <th className="px-4 py-3 text-right">Balance</th>
                     <th className="px-4 py-3 text-right">Utilization</th>
-                    <th className="px-4 py-3 text-right">Over-Budget</th>
+                    {/* <th className="px-4 py-3 text-right">Over-Budget</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -442,7 +442,7 @@ export default function BudgetTrends() {
                       <td className={`px-4 py-3 text-right font-semibold text-xs ${row.utilization_pct > 100 ? 'text-red-600' : row.utilization_pct >= 85 ? 'text-amber-600' : 'text-green-700'}`}>
                         {row.utilization_pct}%
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      {/* <td className="px-4 py-3 text-right">
                         {row.over_budget_count > 0 ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
                             {row.over_budget_count}
@@ -450,7 +450,7 @@ export default function BudgetTrends() {
                         ) : (
                           <span className="text-xs text-gray-400">0</span>
                         )}
-                      </td>
+                      </td> */}
                     </tr>
                   ))}
                 </tbody>

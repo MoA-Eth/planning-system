@@ -301,7 +301,7 @@ export default function BudgetDashboard() {
     return {
       pieData: smo_rows.map((s) => ({ name: s.name, value: s.adjusted })),
       barSmoData: smo_rows.map((s) => ({
-        name: s.name.length > 18 ? s.name.slice(0, 18) + '…' : s.name,
+        name: s.name.length > 18 ? s.name.slice(0, 30) + '…' : s.name,
         Adjusted: s.adjusted,
         Actual: s.actual,
       })),
@@ -419,12 +419,12 @@ export default function BudgetDashboard() {
         <h2 className="font-semibold text-gray-900 mb-1">Budget Share by Office</h2>
         <p className="text-xs text-gray-400 mb-3">Proportional distribution of adjusted budget</p>
         {pieData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={380}>
-            <PieChart>
+          <ResponsiveContainer width="100%" height={400}>
+            <PieChart margin={{ top: 30, right: 30, bottom: 10, left: 30 }}>
               <Pie
-                data={pieData} cx="50%" cy="45%"
-                outerRadius={140} dataKey="value" nameKey="name"
-                label={({ name, percent }) => `${(name ?? '').split(' ')[0]}: ${((percent ?? 0) * 100).toFixed(0)}%`}
+                data={pieData} cx="50%" cy="50%"
+                outerRadius={130} dataKey="value" nameKey="name"
+                label={({ name, percent }) => `${(name ?? '').length > 20 ? (name ?? '').slice(0, 30) + '…' : (name ?? '')}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                 labelLine
               >
                 {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
@@ -443,7 +443,7 @@ export default function BudgetDashboard() {
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={barSmoData} margin={{ top: 4, right: 16, left: 0, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-25} textAnchor="end" interval={0} />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} angle={-25} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtShort} width={60} />
               <Tooltip formatter={(v: any) => `ETB ${fmt(v)}`} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
