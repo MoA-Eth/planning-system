@@ -249,7 +249,7 @@ def within_quarter_submission_window(date: timezone.datetime, quarter: int) -> b
     # Each window extends by 10 days after its end date.
     tz = timezone.get_current_timezone()
     # Determine fiscal year start (FY starts July 1x; we anchor to July of the FY)
-    fy_start_year = date.year if date.month >= 7 else date.year - 1
+    fy_start_year = date.year if date.month >= 8 else date.year - 1
     if quarter == 1:
         start = timezone.datetime(year=fy_start_year, month=10, day=5, tzinfo=tz)
         end = timezone.datetime(year=fy_start_year, month=10, day=14, tzinfo=tz)
