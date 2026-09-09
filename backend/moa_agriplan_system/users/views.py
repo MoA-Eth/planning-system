@@ -842,24 +842,36 @@ class IndicatorPerformanceView(APIView):
                     if quarter_months:
                         try:
                             breakdown = breakdowns_qs.get(plan_id=plan.id)
-                            quarter_months_map = {1: 3, 2: 6, 3: 9, 4: 12}
-                            in_period_quarters = [q for q in [1, 2, 3, 4] if quarter_months_map[q] <= quarter_months]
                             if plan.indicator.is_incremental:
-                                qt = 0
-                                for q in sorted(in_period_quarters, reverse=True):
-                                    v = getattr(breakdown, f'q{q}', None)
-                                    if v is not None:
-                                        qt = float(v)
-                                        break
+                                # For incremental indicators, only use quarterly breakdown for partial year
+                                if quarter_months == 12:
+                                    # Full year: use annual target (already set in line 841)
+                                    pass
+                                else:
+                                    # Partial year (Q1, Q2, Q3): use quarterly breakdown target
+                                    quarter_num = {3: 1, 6: 2, 9: 3}.get(quarter_months)
+                                    if quarter_num:
+                                        v = getattr(breakdown, f'q{quarter_num}', None)
+                                        if v is not None:
+                                            target = float(v)
+                                        else:
+                                            # Fallback to proportional if breakdown value is None
+                                            target = (target * quarter_months) / 12
+                                    else:
+                                        # Fallback for unexpected quarter_months values
+                                        target = (target * quarter_months) / 12
                             else:
+                                # Cumulative indicators: sum quarterly targets
                                 qt = 0
                                 if quarter_months >= 3: qt += float(breakdown.q1 or 0)
                                 if quarter_months >= 6: qt += float(breakdown.q2 or 0)
                                 if quarter_months >= 9: qt += float(breakdown.q3 or 0)
                                 if quarter_months >= 12: qt += float(breakdown.q4 or 0)
-                            target = qt
+                                target = qt
                         except QuarterlyBreakdown.DoesNotExist:
-                            target = (target * quarter_months) / 12
+                            # If no breakdown exists, use proportional calculation
+                            if quarter_months < 12:
+                                target = (target * quarter_months) / 12
                 except (ValueError, TypeError):
                     is_na_target = True
                     target = 0
