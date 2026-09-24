@@ -40,6 +40,7 @@ pipeline {
                         credentialsId: 'moapms-ssh-key'
                     ]]
                 ])
+                stash name: 'src', includes: '**', excludes: '.git/**'
             }
         }
 
@@ -52,7 +53,11 @@ pipeline {
                     args '-v $WORKSPACE:/app -u root'
                 }
             }
+            options {
+                skipDefaultCheckout(true)
+            }
             steps {
+                unstash 'src'
                 dir('backend') {
                     sh '''
                         pip install -r requirements.txt flake8 --no-cache-dir
@@ -70,7 +75,11 @@ pipeline {
                     label 'builtin-linux'
                 }
             }
+            options {
+                skipDefaultCheckout(true)
+            }
             steps {
+                unstash 'src'
                 dir('frontend/planning-vite') {
                     sh '''
                         npm ci
@@ -89,7 +98,11 @@ pipeline {
                     args '-v $WORKSPACE:/app -u root'
                 }
             }
+            options {
+                skipDefaultCheckout(true)
+            }
             steps {
+                unstash 'src'
                 dir('backend/moa_agriplan_system') {
                     sh '''
                         pip install -r ../requirements.txt --no-cache-dir
@@ -108,7 +121,11 @@ pipeline {
                     label 'builtin-linux'
                 }
             }
+            options {
+                skipDefaultCheckout(true)
+            }
             steps {
+                unstash 'src'
                 dir('frontend/planning-vite') {
                     sh '''
                         npm ci
