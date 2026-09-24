@@ -3,6 +3,7 @@ import type React from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { getCurrentEthiopianDate } from '../lib/ethiopian';
+import SearchableSelect from '../components/SearchableSelect';
 import { 
   Calendar, 
   Target, 
@@ -759,17 +760,15 @@ export default function AnnualPlans() {
                     <Layers className="inline w-4 h-4 mr-1" />
                     Indicator *
                   </label>
-                  <select
+                  <SearchableSelect
+                    options={indicators}
                     value={indicatorId}
-                    onChange={(e) => setIndicatorId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                    required
-                  >
-                    <option value="">Select indicator</option>
-                    {indicators.map((i) => (
-                      <option key={i.id} value={i.id}>{formatIndicatorDisplayName(i)}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setIndicatorId(v)}
+                    placeholder="Select indicator"
+                    disabled={!departmentId}
+                    getLabel={(i) => formatIndicatorDisplayName(i)}
+                    getValue={(i) => i.id}
+                  />
                 </div>
               </div>
 

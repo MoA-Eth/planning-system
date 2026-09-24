@@ -149,7 +149,7 @@ function SearchableSelect({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full min-w-[400px] max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
           <div className="p-2 border-b border-gray-100">
             <input
               autoFocus
@@ -160,12 +160,12 @@ function SearchableSelect({
               className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-emerald-400"
             />
           </div>
-          <div className="max-h-52 overflow-y-auto">
+          <div className="max-h-52 overflow-y-auto overflow-x-auto">
             {value !== null && (
               <button
                 type="button"
                 onClick={() => { onChange(null); setOpen(false); setSearch(''); }}
-                className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 italic"
+                className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 italic whitespace-nowrap"
               >
                 Clear selection
               </button>
@@ -178,7 +178,7 @@ function SearchableSelect({
                   key={getValue(o)}
                   type="button"
                   onClick={() => { onChange(getValue(o)); setOpen(false); setSearch(''); }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-800 transition-colors
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-800 transition-colors whitespace-nowrap
                     ${getValue(o) === value ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-700'}`}
                 >
                   {getLabel(o)}
