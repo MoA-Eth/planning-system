@@ -26,6 +26,7 @@ pipeline {
         /* ================= CHECKOUT ================= */
         stage('Checkout') {
             steps {
+                deleteDir()
                 checkout([
                     $class: 'GitSCM',
                     branches: [[name: '*/main']],
@@ -40,7 +41,7 @@ pipeline {
                         credentialsId: 'moapms-ssh-key'
                     ]]
                 ])
-                stash name: 'src', includes: '**', excludes: '.git/**'
+                stash name: 'src', includes: '**', excludes: '.git/**,**/node_modules/**,**/__pycache__/**'
             }
         }
 
@@ -57,6 +58,7 @@ pipeline {
                 skipDefaultCheckout(true)
             }
             steps {
+                deleteDir()
                 unstash 'src'
                 dir('backend') {
                     sh '''
@@ -79,6 +81,7 @@ pipeline {
                 skipDefaultCheckout(true)
             }
             steps {
+                deleteDir()
                 unstash 'src'
                 dir('frontend/planning-vite') {
                     sh '''
@@ -102,6 +105,7 @@ pipeline {
                 skipDefaultCheckout(true)
             }
             steps {
+                deleteDir()
                 unstash 'src'
                 dir('backend/moa_agriplan_system') {
                     sh '''
@@ -125,6 +129,7 @@ pipeline {
                 skipDefaultCheckout(true)
             }
             steps {
+                deleteDir()
                 unstash 'src'
                 dir('frontend/planning-vite') {
                     sh '''
