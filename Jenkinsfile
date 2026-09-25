@@ -26,7 +26,6 @@ pipeline {
         /* ================= CHECKOUT ================= */
         stage('Checkout') {
             steps {
-                deleteDir()
                 checkout([
                     $class: 'GitSCM',
                     branches: [[name: '*/main']],
@@ -41,7 +40,6 @@ pipeline {
                         credentialsId: 'moapms-ssh-key'
                     ]]
                 ])
-                stash name: 'src', includes: '**', excludes: '.git/**,**/node_modules/**,**/__pycache__/**'
             }
         }
 
@@ -54,12 +52,7 @@ pipeline {
                     args '-v $WORKSPACE:/app -u root'
                 }
             }
-            options {
-                skipDefaultCheckout(true)
-            }
             steps {
-                deleteDir()
-                unstash 'src'
                 dir('backend') {
                     sh '''
                         pip install -r requirements.txt flake8 --no-cache-dir
@@ -77,12 +70,7 @@ pipeline {
                     label 'builtin-linux'
                 }
             }
-            options {
-                skipDefaultCheckout(true)
-            }
             steps {
-                deleteDir()
-                unstash 'src'
                 dir('frontend/planning-vite') {
                     sh '''
                         npm ci
@@ -101,12 +89,7 @@ pipeline {
                     args '-v $WORKSPACE:/app -u root'
                 }
             }
-            options {
-                skipDefaultCheckout(true)
-            }
             steps {
-                deleteDir()
-                unstash 'src'
                 dir('backend/moa_agriplan_system') {
                     sh '''
                         pip install -r ../requirements.txt --no-cache-dir
@@ -125,12 +108,7 @@ pipeline {
                     label 'builtin-linux'
                 }
             }
-            options {
-                skipDefaultCheckout(true)
-            }
             steps {
-                deleteDir()
-                unstash 'src'
                 dir('frontend/planning-vite') {
                     sh '''
                         npm ci
@@ -236,3 +214,4 @@ EOF
         }
     }
 }
+
