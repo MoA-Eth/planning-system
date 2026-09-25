@@ -47,7 +47,7 @@ pipeline {
             ],
             userRemoteConfigs: [[
                 url: 'https://github.com/lidu5/planning-system.git',
-                credentialsId: 'moapms-https-credentials'
+                credentialsId: 'moapms-ssh-key'
             ]]
         ])
     }
