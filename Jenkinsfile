@@ -26,32 +26,23 @@ pipeline {
 
         /* ================= CHECKOUT ================= */
         stage('Checkout') {
-    steps {
-        checkout([
-            $class: 'GitSCM',
-            branches: [[name: '*/main']],
-            doGenerateSubmoduleConfigurations: false,
-            extensions: [
-                [
-                    $class: 'CloneOption',
-                    shallow: true,
-                    depth: 1,
-                    noTags: true,
-                    reference: '',
-                    timeout: 30
-                ],
-                [
-                    $class: 'CheckoutOption',
-                    timeout: 30
-                ]
-            ],
-            userRemoteConfigs: [[
-                url: 'https://github.com/lidu5/planning-system.git',
-                credentialsId: 'moapms-ssh-key'
-            ]]
-        ])
-    }
-}
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    extensions: [[
+                        $class: 'CloneOption',
+                        shallow: true,
+                        depth: 1,
+                        timeout: 120
+                    ]],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/lidu5/planning-system.git',
+                        credentialsId: 'moapms-ssh-key'
+                    ]]
+                ])
+            }
+        }
 
         /* ================= LINT BACKEND ================= */
         stage('Lint Backend') {
