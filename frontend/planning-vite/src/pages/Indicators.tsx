@@ -23,7 +23,7 @@ import {
 
 type Department = { id: number; name: string; sector?: { id: number; name: string } };
 type IndicatorGroup = { id: number; name: string; department: Department };
-type Indicator = { id: number; name: string; unit?: string; description?: string; department: Department; groups?: IndicatorGroup[]; is_aggregatable?: boolean; is_incremental?: boolean; display_order?: number | null };
+type Indicator = { id: number; name: string; unit?: string; description?: string; department: Department; groups?: IndicatorGroup[]; is_aggregatable?: boolean; is_incremental?: boolean; display_order?: number | null; is_active_current_year?: boolean };
 type Sector = { id: number; name: string };
 
 export default function Indicators() {
@@ -42,6 +42,7 @@ export default function Indicators() {
   const [groupIds, setGroupIds] = useState<number[]>([]);
   const [isAggregatable, setIsAggregatable] = useState(true);
   const [isIncremental, setIsIncremental] = useState(false);
+  const [isActiveCurrentYear, setIsActiveCurrentYear] = useState(true);
   const [displayOrder, setDisplayOrder] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -156,6 +157,7 @@ export default function Indicators() {
     setGroupIds([]);
     setIsAggregatable(true);
     setIsIncremental(false);
+    setIsActiveCurrentYear(true);
     setDisplayOrder('');
     setFormError(null);
     setIsFormVisible(true);
@@ -197,6 +199,7 @@ export default function Indicators() {
         group_ids: groupIds,
         ...(groupIds.length > 0 && { is_aggregatable: isAggregatable }),
         is_incremental: isIncremental,
+        is_active_current_year: isActiveCurrentYear,
         display_order: displayOrder !== '' ? Number(displayOrder) : null,
       };
       
@@ -255,6 +258,7 @@ export default function Indicators() {
     setGroupIds((i.groups || []).map((g) => g.id));
     setIsAggregatable(i.is_aggregatable ?? true);
     setIsIncremental(i.is_incremental ?? false);
+    setIsActiveCurrentYear(i.is_active_current_year ?? true);
     setDisplayOrder(i.display_order ?? '');
     setIsFormVisible(true);
     
@@ -626,6 +630,30 @@ export default function Indicators() {
                 </p>
               </div>
 
+              {/* Active Current Year Checkbox - always visible */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <CheckCircle className="inline w-4 h-4 mr-1" />
+                  Active for Current Year
+                </label>
+                <div className="flex items-center h-10">
+                  <input
+                    type="checkbox"
+                    id="is-active-current-year"
+                    checked={isActiveCurrentYear}
+                    onChange={(e) => setIsActiveCurrentYear(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    disabled={isSubmitting}
+                  />
+                  <label htmlFor="is-active-current-year" className="ml-2 text-sm text-gray-700">
+                    This indicator is active in the current planning year
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Uncheck to deactivate this indicator for the current year without deleting it
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
@@ -781,6 +809,16 @@ export default function Indicators() {
                               </div>
                             </>
                           )}
+                          <div className="mt-1">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              indicator.is_active_current_year !== false
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {indicator.is_active_current_year !== false ? 'Active' : 'Inactive'}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-1">This Year</span>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">

@@ -28,6 +28,11 @@ type Department = { id: number; name: string; sector: Sector };
 type Indicator = { 
   id: number; 
   name: string; 
+  code?: string;
+  display_order?: number | null;
+  unit?: string;
+  description?: string;
+  is_active_current_year?: boolean;
   department?: Department; 
   groups?: Array<{
     id: number;
@@ -108,6 +113,133 @@ export default function AnnualPlans() {
   const [target, setTarget] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Bulk targets state
+  const [bulkTargets, setBulkTargets] = useState<Record<number, string>>({});
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
+  const [bulkSaveSuccess, setBulkSaveSuccess] = useState<string | null>(null);
+
+  // Auto-prefill bulk targets when department, year, indicators, or plans change
+  useEffect(() => {
+    if (departmentId && year && indicators.length > 0) {
+      const gregYear = toGregorianYearFromEthiopian(year);
+      const initialMap: Record<number, string> = {};
+      indicators.forEach((ind) => {
+        const existingPlan = plans.find(p => p.indicator === ind.id && p.year === gregYear);
+        if (existingPlan) {
+          initialMap[ind.id] = String(existingPlan.target ?? '');
+        }
+      });
+      setBulkTargets(initialMap);
+    } else {
+      setBulkTargets({});
+    }
+  }, [departmentId, year, indicators, plans]);
+
+  // Group indicators for bulk form by their immediate/parent group
+  const groupedFormIndicators = useMemo(() => {
+    const map = new Map<string, { groupName: string; parentPath?: string; items: Indicator[] }>();
+    const ungrouped: Indicator[] = [];
+
+    // Filter only active indicators for current year
+    const activeIndicators = indicators.filter((ind) => ind.is_active_current_year !== false);
+
+    for (const ind of activeIndicators) {
+      if (ind.hierarchy_context && ind.hierarchy_context.hierarchy_path) {
+        const path = ind.hierarchy_context.hierarchy_path;
+        if (!map.has(path)) {
+          map.set(path, { groupName: ind.hierarchy_context.group_name || path, parentPath: path, items: [] });
+        }
+        map.get(path)!.items.push(ind);
+      } else if (ind.groups && ind.groups.length > 0) {
+        const g = ind.groups[0];
+        const path = g.hierarchy_path || g.name;
+        if (!map.has(path)) {
+          map.set(path, { groupName: g.name, parentPath: path, items: [] });
+        }
+        map.get(path)!.items.push(ind);
+      } else {
+        ungrouped.push(ind);
+      }
+    }
+
+    return {
+      groups: Array.from(map.entries()).map(([_, val]) => val),
+      ungrouped
+    };
+  }, [indicators]);
+
+  const onBulkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBulkSaveSuccess(null);
+    
+    if (!departmentId) {
+      setError('Please select a department');
+      return;
+    }
+    if (!year) {
+      setError('Please select a year');
+      return;
+    }
+    if (indicators.length === 0) {
+      setError('No indicators found for the selected department');
+      return;
+    }
+
+    setIsSavingBulk(true);
+    try {
+      const gregYear = toGregorianYearFromEthiopian(year);
+      const savePromises: Promise<any>[] = [];
+      let saveCount = 0;
+
+      for (const ind of indicators) {
+        const val = bulkTargets[ind.id];
+        if (val !== undefined && val.trim() !== '') {
+          const existingPlan = plans.find(p => p.indicator === ind.id && p.year === gregYear);
+          if (existingPlan) {
+            if (String(existingPlan.target) !== val.trim()) {
+              savePromises.push(
+                api.put(`/api/annual-plans/${existingPlan.id}/`, {
+                  year: gregYear,
+                  indicator: ind.id,
+                  target: val.trim()
+                })
+              );
+              saveCount++;
+            }
+          } else {
+            savePromises.push(
+              api.post('/api/annual-plans/', {
+                year: gregYear,
+                indicator: ind.id,
+                target: val.trim()
+              })
+            );
+            saveCount++;
+          }
+        }
+      }
+
+      if (savePromises.length === 0) {
+        setError('No targets were entered or modified.');
+        setIsSavingBulk(false);
+        return;
+      }
+
+      await Promise.all(savePromises);
+      setBulkSaveSuccess(`Successfully saved ${saveCount} annual plan target(s)!`);
+      await loadPlans();
+
+      setTimeout(() => {
+        setBulkSaveSuccess(null);
+      }, 5000);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Failed to save annual plans. Please try again.');
+    } finally {
+      setIsSavingBulk(false);
+    }
+  };
 
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<AnnualPlan | null>(null);
@@ -674,33 +806,34 @@ export default function AnnualPlans() {
           </div>
         </div>
 
-        {/* Create Plan Form */}
+        {/* Create Plan Form (Bulk Entry) */}
         {showForm && isSuperuser && (
-          <div className="mb-8 bg-white rounded-2xl border border-gray-200 shadow-lg p-6 transition-all duration-300 hover:shadow-xl">
-            <div className="flex items-center justify-between mb-6">
+          <div className="mb-8 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden transition-all duration-300">
+            <div className="px-6 py-5 bg-gradient-to-r from-teal-800 to-emerald-800 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 rounded-lg">
-                  <Plus className="w-5 h-5 text-emerald-600" />
+                <div className="p-2 bg-white/10 rounded-xl backdrop-blur-sm">
+                  <Plus className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg text-gray-900">Create New Annual Plan</h3>
-                  <p className="text-sm text-gray-600">Define annual targets for indicators</p>
+                  <h3 className="font-bold text-xl text-white">Add Annual Plans (Bulk Entry)</h3>
+                  <p className="text-sm text-teal-100">Select Year, Sector, and Department to enter targets for all indicators</p>
                 </div>
               </div>
               <button
                 onClick={resetForm}
-                className="text-gray-400 hover:text-gray-600"
+                className="p-2 text-teal-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={onSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <form onSubmit={onBulkSubmit} className="p-6 space-y-6">
+              {/* Step 1: Selectors */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50 p-5 rounded-xl border border-gray-200">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Calendar className="inline w-4 h-4 mr-1" />
-                    Year *
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Calendar className="inline w-4 h-4 mr-1.5 text-teal-600" />
+                    Year (Ethiopian) *
                   </label>
                   <input
                     type="number"
@@ -708,24 +841,24 @@ export default function AnnualPlans() {
                     max={2100}
                     value={year}
                     onChange={(e) => setYear(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all font-medium text-gray-900"
                     placeholder="Enter Ethiopian year"
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Ethiopian year: {year} ዓ.ም = {toGregorianYearFromEthiopian(year)} G.C.
+                    {year} ዓ.ም ({toGregorianYearFromEthiopian(year)} G.C.)
                   </p>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Building className="inline w-4 h-4 mr-1" />
-                    Sector
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Building className="inline w-4 h-4 mr-1.5 text-teal-600" />
+                    Sector *
                   </label>
                   <select
                     value={sectorId}
                     onChange={(e) => setSectorId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all text-gray-900 font-medium"
                     disabled={!!user?.sector && isAdvisorOrMinister}
                     required
                   >
@@ -737,15 +870,15 @@ export default function AnnualPlans() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Building className="inline w-4 h-4 mr-1" />
-                    Department
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Building className="inline w-4 h-4 mr-1.5 text-teal-600" />
+                    Department *
                   </label>
                   <select
                     value={departmentId}
                     onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                    disabled={!!user?.department && isAdvisorOrMinister}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all text-gray-900 font-medium disabled:bg-gray-100"
+                    disabled={!sectorId || (!!user?.department && isAdvisorOrMinister)}
                     required
                   >
                     <option value="">Select department</option>
@@ -754,66 +887,187 @@ export default function AnnualPlans() {
                     ))}
                   </select>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Layers className="inline w-4 h-4 mr-1" />
-                    Indicator *
-                  </label>
-                  <SearchableSelect
-                    options={indicators}
-                    value={indicatorId}
-                    onChange={(v) => setIndicatorId(v)}
-                    placeholder="Select indicator"
-                    disabled={!departmentId}
-                    getLabel={(i) => formatIndicatorDisplayName(i)}
-                    getValue={(i) => i.id}
-                  />
-                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Target className="inline w-4 h-4 mr-1" />
-                  Target Value
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Enter target value"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter the annual target for this indicator</p>
-              </div>
-
-              {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-500" />
-                    <p className="text-sm text-red-600">{error}</p>
-                  </div>
+              {/* Status messages */}
+              {bulkSaveSuccess && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                  <p className="text-sm font-medium text-emerald-800">{bulkSaveSuccess}</p>
                 </div>
               )}
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-xl hover:from-emerald-700 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  <CheckCircle className="w-5 h-5" />
-                  Create Plan
-                </button>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-              </div>
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <p className="text-sm font-medium text-red-700">{error}</p>
+                </div>
+              )}
+
+              {/* Step 2: Grouped Indicators Table */}
+              {!departmentId ? (
+                <div className="p-10 text-center bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+                  <Layers className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600 font-medium">Please select a Department to display indicators</p>
+                </div>
+              ) : indicators.length === 0 ? (
+                <div className="p-10 text-center bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+                  <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+                  <p className="text-gray-700 font-medium">No indicators found for this department.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Table Column Labels */}
+                  <div className="hidden md:flex items-center justify-between px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    <span className="w-36">Code</span>
+                    <span className="flex-1 px-4">Name & Description</span>
+                    <span className="w-48 text-right pr-2">Target Value</span>
+                  </div>
+
+                  {/* Groups Rendering */}
+                  {groupedFormIndicators.groups.map((grp, idx) => (
+                    <div key={idx} className="border border-gray-300 rounded-xl overflow-hidden shadow-sm">
+                      {/* Primary Group Header Banner */}
+                      <div className="bg-[#008080] text-white px-5 py-3 font-bold text-base flex items-center justify-between">
+                        <span>{grp.groupName}</span>
+                        <span className="text-xs font-normal bg-white/20 px-2.5 py-1 rounded-full text-white">
+                          {grp.items.length} Indicator(s)
+                        </span>
+                      </div>
+
+                      {/* Parent Sub-path if available */}
+                      {grp.parentPath && grp.parentPath !== grp.groupName && (
+                        <div className="bg-gray-200 text-gray-800 px-5 py-2 font-semibold text-xs tracking-wide border-b border-gray-300">
+                          {grp.parentPath}
+                        </div>
+                      )}
+
+                      {/* Rows for Indicators in this Group */}
+                      <div className="divide-y divide-gray-200 bg-white">
+                        {grp.items.map((ind) => {
+                          const kpiCode = ind.display_order ? `FDRE-KPI-${ind.display_order}` : `KPI-${ind.id}`;
+                          return (
+                            <div key={ind.id} className="p-4 hover:bg-teal-50/30 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="w-full md:w-36 flex-shrink-0">
+                                <span className="font-mono text-xs font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded border border-gray-300 inline-block">
+                                  {kpiCode}
+                                </span>
+                              </div>
+
+                              <div className="flex-1">
+                                <div className="flex items-start gap-2">
+                                  <h5 className="font-semibold text-gray-900 text-sm">{ind.name}</h5>
+                                  {ind.unit && (
+                                    <span className="text-[11px] font-medium px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200 flex-shrink-0">
+                                      {ind.unit}
+                                    </span>
+                                  )}
+                                </div>
+                                {ind.description && (
+                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{ind.description}</p>
+                                )}
+                              </div>
+
+                              <div className="w-full md:w-48 flex items-center justify-between md:justify-end gap-3 flex-shrink-0">
+                                <span className="text-xs font-semibold text-emerald-700">Target:</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={bulkTargets[ind.id] ?? ''}
+                                  onChange={(e) => setBulkTargets(prev => ({ ...prev, [ind.id]: e.target.value }))}
+                                  placeholder="0.00"
+                                  className="w-32 px-3 py-1.5 border-2 border-emerald-600 rounded-lg text-right font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-600 outline-none transition-all shadow-sm"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Ungrouped Indicators */}
+                  {groupedFormIndicators.ungrouped.length > 0 && (
+                    <div className="border border-gray-300 rounded-xl overflow-hidden shadow-sm">
+                      <div className="bg-gray-700 text-white px-5 py-3 font-bold text-base flex items-center justify-between">
+                        <span>Ungrouped Indicators</span>
+                        <span className="text-xs font-normal bg-white/20 px-2.5 py-1 rounded-full text-white">
+                          {groupedFormIndicators.ungrouped.length} Indicator(s)
+                        </span>
+                      </div>
+                      <div className="divide-y divide-gray-200 bg-white">
+                        {groupedFormIndicators.ungrouped.map((ind) => {
+                          const kpiCode = ind.display_order ? `FDRE-KPI-${ind.display_order}` : `KPI-${ind.id}`;
+                          return (
+                            <div key={ind.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="w-full md:w-36 flex-shrink-0">
+                                <span className="font-mono text-xs font-bold text-gray-800 bg-gray-100 px-2.5 py-1 rounded border border-gray-300 inline-block">
+                                  {kpiCode}
+                                </span>
+                              </div>
+
+                              <div className="flex-1">
+                                <div className="flex items-start gap-2">
+                                  <h5 className="font-semibold text-gray-900 text-sm">{ind.name}</h5>
+                                  {ind.unit && (
+                                    <span className="text-[11px] font-medium px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200 flex-shrink-0">
+                                      {ind.unit}
+                                    </span>
+                                  )}
+                                </div>
+                                {ind.description && (
+                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{ind.description}</p>
+                                )}
+                              </div>
+
+                              <div className="w-full md:w-48 flex items-center justify-between md:justify-end gap-3 flex-shrink-0">
+                                <span className="text-xs font-semibold text-emerald-700">Target:</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={bulkTargets[ind.id] ?? ''}
+                                  onChange={(e) => setBulkTargets(prev => ({ ...prev, [ind.id]: e.target.value }))}
+                                  placeholder="0.00"
+                                  className="w-32 px-3 py-1.5 border-2 border-emerald-600 rounded-lg text-right font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-600 outline-none transition-all shadow-sm"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Form Action Buttons */}
+                  <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+                      disabled={isSavingBulk}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingBulk || indicators.length === 0}
+                      className="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-teal-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSavingBulk ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Saving Targets...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-5 h-5" />
+                          Save All Targets
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         )}

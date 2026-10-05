@@ -135,7 +135,6 @@ export default function Reviews() {
         
         // If plan is N/A and no performance exists, create N/A performance as SUBMITTED
         if ((quarterPlan === null || quarterPlan === '' || quarterPlan === 'N/A') && !perfs.find(p => p.plan === plan.id && p.quarter === quarter)) {
-          console.log(`Creating N/A performance for plan ${plan.id}, Q${quarter}, planValue: ${quarterPlan}`);
           try {
             const res = await api.post('/api/performances/115/submit/', { 
               plan: plan.id, 
@@ -144,11 +143,9 @@ export default function Reviews() {
               status: 'SUBMITTED' 
             });
             const created: Performance = res.data;
-            console.log(`Successfully created N/A performance:`, created);
             setPerfs((prev) => [...prev, created]);
           } catch (error) {
             // Log error but don't fail entire load
-            console.warn(`Failed to auto-create N/A performance for plan ${plan.id}, Q${quarter}:`, error);
           }
         }
       }
@@ -180,13 +177,6 @@ export default function Reviews() {
 
       // Add a small delay to ensure state is updated before auto-creation
       setTimeout(async () => {
-        console.log('Starting auto-creation of N/A performances...');
-        console.log('Data loaded:', { 
-          plansCount: plansRes.data?.length || 0, 
-          breakdownsCount: bRes.data?.length || 0, 
-          perfsCount: pRes.data?.length || 0 
-        });
-        
         // Auto-create N/A performances for State Minister view
         await autoCreateNAPerformances();
       }, 100);

@@ -177,6 +177,10 @@ class Indicator(models.Model):
         max_digits=20, decimal_places=2, null=True, blank=True,
         help_text="Baseline value for this indicator"
     )
+    is_active_current_year = models.BooleanField(
+        default=True,
+        help_text="Whether this indicator is active for the current planning year"
+    )
 
     class Meta:
         # No unique constraint - allow same indicator names in different departments/groups

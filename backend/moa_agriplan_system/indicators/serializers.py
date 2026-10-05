@@ -151,7 +151,7 @@ class IndicatorSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'unit', 'description', 'department', 'department_id', 
             'groups', 'group_ids', 'is_aggregatable', 'is_incremental', 'effective_unit', 'hierarchy_context',
-            'applicable_quarters', 'baseline', 'display_order'
+            'applicable_quarters', 'baseline', 'display_order', 'is_active_current_year'
         ]
 
     def get_hierarchy_context(self, obj):
