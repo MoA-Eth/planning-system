@@ -64,8 +64,10 @@ export default function QuarterlyBreakdowns() {
   const [planModal, setPlanModal] = useState<{ open: boolean; planId: number | null; quarter: 1|2|3|4 | null; value: string; indicatorName: string }>(() => ({ open: false, planId: null, quarter: null, value: '', indicatorName: '' }));
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean; title: string; note: string; by?: string; at?: string; byId?: number }>(() => ({ open: false, title: '', note: '' }));
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const gregYear = toGregorianYearFromEthiopian(year);
@@ -89,23 +91,39 @@ export default function QuarterlyBreakdowns() {
         setPlanWindowOpen(Boolean(win.is_breakdown_window_open));
       }
       
-      // Auto-expand first sector and department
-      if (Object.keys(grouped).length > 0) {
-        const firstSector = Object.keys(grouped)[0];
-        setExpandedSectors(new Set([firstSector]));
-        const firstDept = Object.keys(grouped[firstSector]?.departments || {})[0];
-        setExpandedDepartments(new Set([`${firstSector}-${firstDept}`]));
-      }
+      // Auto-expand first sector and department only if not already expanded
+      setExpandedSectors((prev) => {
+        if (prev.size > 0) return prev;
+        if (filtered.length > 0) {
+          const firstSector = String(filtered[0].sector_id ?? 'unknown');
+          return new Set([firstSector]);
+        }
+        return prev;
+      });
+
+      setExpandedDepartments((prev) => {
+        if (prev.size > 0) return prev;
+        if (filtered.length > 0) {
+          const firstSector = String(filtered[0].sector_id ?? 'unknown');
+          const firstDept = String(filtered[0].department_id ?? 'unknown');
+          return new Set([`${firstSector}-${firstDept}`]);
+        }
+        return prev;
+      });
     } catch (e: any) {
       const msg = e?.userMessage || getErrorMessage(e, 'Failed to load data');
       setError(msg);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadData();
+    setExpandedSectors(new Set());
+    setExpandedDepartments(new Set());
+    loadData(true);
   }, [year]);
 
   const canEditPlan = (planId?: number): boolean => {
@@ -283,7 +301,7 @@ export default function QuarterlyBreakdowns() {
       const q3Value = overrides && overrides.q3 !== undefined ? convertInputToAPIValue(overrides.q3) : convertInputToAPIValue(current?.q3?.toString() ?? '');
       const q4Value = overrides && overrides.q4 !== undefined ? convertInputToAPIValue(overrides.q4) : convertInputToAPIValue(current?.q4?.toString() ?? '');
       
-      await api.put(`/api/breakdowns/${bd.id}/`, {
+      const res = await api.put(`/api/breakdowns/${bd.id}/`, {
         plan: planId,
         q1: q1Value,
         q2: q2Value,
@@ -291,7 +309,10 @@ export default function QuarterlyBreakdowns() {
         q4: q4Value,
         status: current.status || bd.status,
       });
-      await loadData();
+      if (res.data) {
+        setBreakdowns((prev) => ({ ...prev, [planId]: res.data }));
+      }
+      await loadData(false);
       setSuccess('Quarterly plan saved successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) {
@@ -310,8 +331,11 @@ export default function QuarterlyBreakdowns() {
   const submitPlan = async (planId: number) => {
     try {
       const bd = await ensureCreate(planId);
-      await api.post(`/api/breakdowns/${bd.id}/submit/`);
-      await loadData();
+      const res = await api.post(`/api/breakdowns/${bd.id}/submit/`);
+      if (res.data) {
+        setBreakdowns((prev) => ({ ...prev, [planId]: res.data }));
+      }
+      await loadData(false);
       setSuccess('Quarterly plan submitted for review');
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) {
