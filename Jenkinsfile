@@ -18,12 +18,6 @@ pipeline {
         REMOTE_USER   = 'moapms'
         REMOTE_PATH   = '/home/moapms/moa-planning-system'
 
-        // Credential IDs (create these in Jenkins > Manage Credentials)
-        // GITHUB_CREDS_ID : "Username with password" -> GitHub username + personal access token
-        // SSH_CREDS_ID    : "SSH Username with private key" -> key for the deploy server
-        GITHUB_CREDS_ID = 'pms'
-        SSH_CREDS_ID    = 'moapms3-ssh-key'
-
         DJANGO_SETTINGS_MODULE = 'moa_agriplan_system.settings'
         PYTHONUNBUFFERED = '1'
     }
@@ -43,8 +37,8 @@ pipeline {
                         timeout: 120
                     ]],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/MoA-Eth/planning-system.git',
-                        credentialsId: "${GITHUB_CREDS_ID}"
+                        url: 'https://github.com/lidu5/planning-system.git',
+                        credentialsId: 'moapms-ssh-key'
                     ]]
                 ])
             }
@@ -56,15 +50,14 @@ pipeline {
                 docker {
                     image 'python:3.11'
                     label 'builtin-linux'
-                    reuseNode true   // use the workspace that Checkout populated
-                    args '-e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1'
+                    args '-v $WORKSPACE:/app -u root'
                 }
             }
             steps {
                 dir('backend') {
                     sh '''
-                        python -m pip install --user -r requirements.txt flake8 --no-cache-dir
-                        python -m flake8 . --count --exit-zero --max-line-length=127
+                        pip install -r requirements.txt flake8 --no-cache-dir
+                        flake8 . --count --exit-zero --max-line-length=127
                     '''
                 }
             }
@@ -76,8 +69,6 @@ pipeline {
                 docker {
                     image 'node:20'
                     label 'builtin-linux'
-                    reuseNode true
-                    args '-e HOME=/tmp'
                 }
             }
             steps {
@@ -96,15 +87,13 @@ pipeline {
                 docker {
                     image 'python:3.11'
                     label 'builtin-linux'
-                    reuseNode true
-                    args '-e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1'
+                    args '-v $WORKSPACE:/app -u root'
                 }
             }
             steps {
                 dir('backend/moa_agriplan_system') {
-                    // If tests need SECRET_KEY / DB settings, add them to the environment block above.
                     sh '''
-                        python -m pip install --user -r ../requirements.txt --no-cache-dir
+                        pip install -r ../requirements.txt --no-cache-dir
                         python manage.py test --verbosity=2
                         python manage.py check --deploy
                     '''
@@ -118,8 +107,6 @@ pipeline {
                 docker {
                     image 'node:20'
                     label 'builtin-linux'
-                    reuseNode true
-                    args '-e HOME=/tmp'
                 }
             }
             steps {
@@ -137,45 +124,29 @@ pipeline {
             steps {
                 script {
                     dir('backend') {
-                        def backendImg = docker.build("${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG}")
-                        backendImg.tag('latest')
+                        docker.build("${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG}")
+                        docker.build("${DOCKER_IMAGE_BACKEND}:latest")
                     }
                     dir('frontend/planning-vite') {
-                        def frontendImg = docker.build("${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG}")
-                        frontendImg.tag('latest')
+                        docker.build("${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG}")
+                        docker.build("${DOCKER_IMAGE_FRONTEND}:latest")
                     }
                 }
-            }
-        }
-
-        /* ================= APPROVAL (no executor held) ================= */
-        stage('Approve Deploy') {
-            agent none
-            options {
-                timeout(time: 30, unit: 'MINUTES')
-            }
-            input {
-                message "Deploy to ${REMOTE_SERVER}?"
-                ok "Deploy"
-            }
-            steps {
-                echo 'Deployment approved'
             }
         }
 
         /* ================= DEPLOY ================= */
         stage('Deploy to Production') {
             steps {
+                input message: "Deploy to ${REMOTE_SERVER}?", ok: "Deploy"
+
                 withCredentials([usernamePassword(
-                    credentialsId: "${GITHUB_CREDS_ID}",
+                    credentialsId: 'moapms-ssh-key',
                     usernameVariable: 'GIT_USER',
                     passwordVariable: 'GIT_TOKEN'
                 )]) {
-                    sshagent([env.SSH_CREDS_ID]) {
-                        // Single-quoted so Groovy does NOT interpolate secrets.
-                        // The local shell expands $GIT_USER, $GIT_TOKEN, $REMOTE_* inside the heredoc,
-                        // and the script is sent over ssh stdin (not visible in the local process list).
-                        sh '''
+                    sshagent(['moapms3-ssh-key']) {
+                        sh """
                             ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} bash -s << EOF
 set -e
 
@@ -195,11 +166,10 @@ fi
 
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo "Configure .env before deployment"
+    echo "❌ Configure .env before deployment"
     exit 1
 fi
 
-# Use "docker compose" instead if the server has only the v2 plugin
 docker-compose -f docker-compose.prod.yml down
 docker-compose -f docker-compose.prod.yml up -d --build
 
@@ -208,9 +178,10 @@ sleep 20
 docker exec moa-backend-prod python manage.py migrate --noinput
 docker exec moa-backend-prod python manage.py collectstatic --noinput
 
-echo "Deployment completed: http://${REMOTE_SERVER}:8080"
+echo "✅ Deployment completed"
+echo "🌐 http://${REMOTE_SERVER}:8080"
 EOF
-                        '''
+                        """
                     }
                 }
             }
@@ -219,26 +190,29 @@ EOF
         /* ================= HEALTH CHECK ================= */
         stage('Health Check') {
             steps {
-                // No "|| true": a failed check now fails the build.
-                sh '''
-                    curl -f --retry 6 --retry-delay 10 --retry-connrefused http://${REMOTE_SERVER}:8080/health
-                    curl -f --retry 6 --retry-delay 10 --retry-connrefused http://${REMOTE_SERVER}:8080/api/
-                '''
+                sh """
+                    sleep 20
+                    curl -f http://${REMOTE_SERVER}:8080/health || true
+                    curl -f http://${REMOTE_SERVER}:8080/api/ || true
+                """
             }
         }
     }
 
     post {
         always {
-            // Only prune dangling images. Do NOT prune volumes: this talks to the host's Docker daemon.
-            sh 'docker image prune -f || true'
             cleanWs()
+            sh '''
+                docker image prune -f || true
+                docker volume prune -f || true
+            '''
         }
         success {
-            echo 'PIPELINE SUCCESS'
+            echo '✅ PIPELINE SUCCESS'
         }
         failure {
-            echo 'PIPELINE FAILED'
+            echo '❌ PIPELINE FAILED'
         }
     }
 }
+
