@@ -49,8 +49,8 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11'
-                    label 'builtin-linux'
-                    args '-v $WORKSPACE:/app -u root'
+                    reuseNode true
+                    args '-u root'
                 }
             }
             steps {
@@ -68,7 +68,7 @@ pipeline {
             agent {
                 docker {
                     image 'node:20'
-                    label 'builtin-linux'
+                    reuseNode true
                 }
             }
             steps {
@@ -86,8 +86,8 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11'
-                    label 'builtin-linux'
-                    args '-v $WORKSPACE:/app -u root'
+                    reuseNode true
+                    args '-u root'
                 }
             }
             steps {
@@ -106,7 +106,7 @@ pipeline {
             agent {
                 docker {
                     image 'node:20'
-                    label 'builtin-linux'
+                    reuseNode true
                 }
             }
             steps {
