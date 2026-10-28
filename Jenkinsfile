@@ -37,7 +37,7 @@ pipeline {
                         timeout: 120
                     ]],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/lidu5/planning-system.git',
+                        url: 'https://github.com/MoA-Eth/planning-system.git',
                         credentialsId: 'moapms-ssh-key'
                     ]]
                 ])
@@ -158,9 +158,9 @@ git config --global http.lowSpeedLimit 0
 git config --global http.lowSpeedTime 999999
 
 if [ ! -d .git ]; then
-    git clone --depth=1 https://\${GIT_USER}:\${GIT_TOKEN}@github.com/lidu5/planning-system.git .
+    git clone --depth=1 https://${GIT_USER}:${GIT_TOKEN}@github.com/MoA-Eth/planning-system.git .
 else
-    git fetch https://\${GIT_USER}:\${GIT_TOKEN}@github.com/lidu5/planning-system.git main
+    git fetch  https://${GIT_USER}:${GIT_TOKEN}@github.com/MoA-Eth/planning-system.git main
     git reset --hard FETCH_HEAD
 fi
 
