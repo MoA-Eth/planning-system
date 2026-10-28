@@ -37,8 +37,8 @@ pipeline {
                         timeout: 120
                     ]],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/lidu5/planning-system.git',
-                        credentialsId: 'moapms-ssh-key'
+                        url: 'https://github.com/MoA-Eth/planning-system.git',
+                        credentialsId: 'planningsystem'
                     ]]
                 ])
             }
